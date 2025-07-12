@@ -1,14 +1,14 @@
-// bot.js - Versi Final untuk Ethers v6
+// bot.js - Versi Final yang Disempurnakan
+
 import 'dotenv/config'
 import { ethers, namehash, Interface } from 'ethers'
-import { readFile } from 'fs/promises'
+// import { readFile } from 'fs/promises' // <-- Dihapus karena tidak digunakan
 
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL
 const PRIVATE_KEY = process.env.PRIVATE_KEY
 const REGISTRAR_ADDR = '0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175'
 const PUBLIC_RESOLVER = '0x9a43dcA1C3BB268546b98eb2AB1401bFc5b58505'
 
-// ✅ ABI harus tepat dan lowercase function name
 const REGISTRAR_ABI = [
   'function available(string) view returns (bool)',
   'function commitments(bytes32) view returns (uint256)',
@@ -53,7 +53,11 @@ async function registerDomain(label) {
 
   const commitTime = Number(await registrar.commitments(commitment))
   const now = (await provider.getBlock('latest')).timestamp
-  const waitTime = Math.max(0, (await registrar.minCommitmentAge()) - (now - commitTime)) + 15
+  
+  // <-- PERBAIKAN: Konversi BigInt ke Number untuk kalkulasi yang aman
+  const minWait = Number(await registrar.minCommitmentAge()) 
+  const waitTime = Math.max(0, minWait - (now - commitTime)) + 15
+  
   console.log(`⏱ Menunggu ${waitTime} detik...`)
   await sleep(waitTime * 1000)
 
@@ -64,12 +68,8 @@ async function registerDomain(label) {
   ]
   console.log('✅ Data payload siap:', dataPayload)
 
-  // ✅ Optional Pre-check
+  // Pre-check
   console.log('🔍 Pre-check callStatic.register...')
-  if (!('register' in registrar.callStatic)) {
-    throw new Error('ABI tidak mengenali fungsi register() — pastikan ABI benar')
-  }
-
   await registrar.callStatic.register(
     label,
     owner,
@@ -99,8 +99,8 @@ async function registerDomain(label) {
   console.log(`🔗 TX HASH: ${txRegister.hash}`)
 }
 
-// ✅ Jalankan
-const label = 'gyttuku'
+// Jalankan
+const label = 'patnerterakhir'
 registerDomain(label).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan: ${err.reason || err.message}`)
