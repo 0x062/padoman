@@ -1,25 +1,23 @@
-// bot.js - Script Final Bot Registrasi Domain
+// bot.js - Script Final Lengkap
 
 // 1. Impor library yang dibutuhkan
-require('dotenv').config(); // Memuat variabel dari file .env
+require('dotenv').config();
 const { ethers } = require('ethers');
 
 // =================================================================
-// KONFIGURASI - GANTI DENGAN DATA PHAROS TESTNET ANDA
+// KONFIGURASI
 // =================================================================
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-
-// Alamat smart contract registrar di Pharos Testnet
 const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 
 // ABI (Application Binary Interface) untuk Kontrak Registrar
 const REGISTRAR_ABI = [
-    "function available(string memory name) view returns(bool)",
-    "function minCommitmentAge() view returns (uint256)",
-    "function rentPrice(string memory name, uint256 duration) view returns(uint256)",
+    "function Available(string memory name) view returns(bool)",
+    "function MinCommitmentAge() view returns (uint256)",
+    "function RentPrice(string memory name, uint256 duration) view returns(uint256)",
     "function Commit(bytes32 commitment) external",
-    "function resolver() view returns (address)",
+    "function Resolver() view returns (address)",
     "function Register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable"
 ];
 
@@ -65,7 +63,7 @@ async function registerDomain(fullDomainName) {
 
         // LANGKAH 1 & 2: Cek Ketersediaan & Buat Komitmen
         console.log("[1 & 2] Mengecek ketersediaan & membuat komitmen...");
-        const isAvailable = await contract.available(normalizedLabel);
+        const isAvailable = await contract.Available(normalizedLabel);
         if (!isAvailable) throw new Error(`Label '${normalizedLabel}' sudah terdaftar.`);
         const secret = ethers.randomBytes(32);
         const commitment = ethers.solidityPackedKeccak256(
@@ -81,7 +79,7 @@ async function registerDomain(fullDomainName) {
         console.log(`✅ Commit berhasil! Hash: ${commitTx.hash}`);
 
         // LANGKAH 4: Menunggu
-        const waitTime = Number(await contract.minCommitmentAge()) + 15;
+        const waitTime = Number(await contract.MinCommitmentAge()) + 15;
         console.log(`[4] Menunggu selama ${waitTime} detik...`);
         await sleep(waitTime * 1000);
 
@@ -90,11 +88,11 @@ async function registerDomain(fullDomainName) {
         const duration = 31536000; // 1 tahun
 
         // 5a. Dapatkan harga sewa
-        const registrationPrice = await contract.rentPrice(normalizedLabel, duration);
+        const registrationPrice = await contract.RentPrice(normalizedLabel, duration);
         console.log(`   - Harga sewa didapat: ${ethers.formatEther(registrationPrice)} PHRS`);
 
         // 5b. Dapatkan alamat resolver default
-        const resolverAddress = await contract.resolver();
+        const resolverAddress = await contract.Resolver();
         console.log(`   - Alamat resolver didapat: ${resolverAddress}`);
 
         // 5c. Siapkan "data payload" untuk resolver
@@ -133,4 +131,4 @@ async function registerDomain(fullDomainName) {
 }
 
 // Ganti nama domain di bawah ini dengan yang kamu inginkan
-registerDomain("final-testt-doomain.phrs");
+registerDomain("ini-tes-teraukhir.phrs");
