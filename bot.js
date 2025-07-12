@@ -15,15 +15,14 @@ const REGISTRAR_ABI = [
   "function register(string,address,uint256,bytes32,address,bytes[],bool,uint16) payable"
 ];
 
-const RESOLVER_ABI = [
-  "function setAddr(bytes32,address)"
-];
-
 const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
 const sleep = ms => new Promise(res => setTimeout(res, ms));
+
+// Gunakan secret yang disimpan agar sama saat commit dan register
+const secret = ethers.randomBytes(32);
 
 async function registerDomain(label) {
   const owner = await wallet.getAddress();
@@ -37,7 +36,6 @@ async function registerDomain(label) {
   if (!available) throw new Error("Domain tidak tersedia!");
   console.log(`✅ Domain tersedia`);
 
-  const secret = ethers.randomBytes(32);
   const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, owner, secret]);
 
   const commitTx = await registrar.commit(commitment);
@@ -55,10 +53,24 @@ async function registerDomain(label) {
 
   const price = await registrar.rentPrice(label, duration);
 
-  const iface = new ethers.Interface(RESOLVER_ABI);
-  const data = [iface.encodeFunctionData("setAddr", [node, owner])];
+  // Biarkan data kosong seperti pada tx sukses sebelumnya
+  const data = [];
 
   try {
+    console.log("🔍 Melakukan pre-check dengan callStatic...");
+    await registrar.callStatic.register(
+      label,
+      owner,
+      duration,
+      secret,
+      PUBLIC_RESOLVER,
+      data,
+      false,
+      0,
+      { value: price }
+    );
+    console.log("✅ Pre-check callStatic berhasil, melanjutkan transaksi...");
+
     const registerTx = await registrar.register(
       label,
       owner,
