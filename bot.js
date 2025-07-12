@@ -40,25 +40,20 @@ async function registerDomain(label) {
         const ownerAddress = await wallet.getAddress();
         const duration = 31536000;
 
-        // LANGKAH 1: Cek Ketersediaan
-        console.log("[1/5] Mengecek ketersediaan...");
+        // LANGKAH 1, 2, 3, 4 sudah terbukti berhasil...
+        console.log("[1/5] Mengecek ketersediaan... ✅");
         const isAvailable = await contract.available(label);
         if (!isAvailable) throw new Error(`Domain '${label}' tidak tersedia.`);
-        console.log("✅ Domain tersedia.");
-
-        // LANGKAH 2: Buat Komitmen
-        console.log("[2/5] Membuat komitmen...");
+        
+        console.log("[2/5] Membuat komitmen... ✅");
         const secret = ethers.randomBytes(32);
         const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, ownerAddress, secret]);
-        console.log("✅ Komitmen dibuat.");
 
-        // LANGKAH 3: Commit
-        console.log("[3/5] Mengirim transaksi 'commit'...");
+        console.log("[3/5] Mengirim transaksi 'commit'... ✅");
         const commitTx = await contract.commit(commitment);
         await commitTx.wait();
         console.log(`✅ Commit berhasil: ${commitTx.hash}`);
 
-        // LANGKAH 4: Menunggu
         const waitTime = Number(await contract.minCommitmentAge()) + 15;
         console.log(`[4/5] Menunggu selama ${waitTime} detik...`);
         await sleep(waitTime * 1000);
@@ -67,12 +62,14 @@ async function registerDomain(label) {
         console.log("[5/5] Mempersiapkan registrasi final...");
         const price = await contract.rentPrice(label, duration);
         const resolverAddress = await contract.resolver();
-        const node = ethers.namehash(fullNormalizedName);
-        const resolverInterface = new ethers.Interface(RESOLVER_ABI);
-        const dataPayload = [resolverInterface.encodeFunctionData("setAddr", [node, ownerAddress])];
+        
+        // =================================================================
+        // PERUBAHAN KUNCI: Kirim data payload kosong
+        const dataPayload = [];
+        console.log("   - MENGIRIM DATA PAYLOAD KOSONG UNTUK TES.");
+        // =================================================================
         
         console.log("   - Mengirim transaksi 'register'...");
-        // PERUBAHAN FINAL: Memanggil 'register' dengan r kecil
         const registerTx = await contract.register(
             label, ownerAddress, duration, secret, resolverAddress,
             dataPayload, false, 0, { value: price }
@@ -80,7 +77,7 @@ async function registerDomain(label) {
         await registerTx.wait();
         
         console.log("\n🎉🎉🎉 PENDAFTARAN SUKSES! 🎉🎉🎉");
-        console.log(`Domain '${fullNormalizedName}' telah terdaftar.`);
+        console.log(`Domain '${fullNormalizedName}' telah terdaftar (tanpa pengaturan alamat).`);
         console.log(`Tx Hash: ${registerTx.hash}`);
 
     } catch (error) {
@@ -88,6 +85,5 @@ async function registerDomain(label) {
         console.error(error.reason || error.message);
     }
 }
-
 // Ganti label di bawah ini dan jalankan
 registerDomain("patnerfinasl");
