@@ -31,10 +31,11 @@ async function registerDomain(label) {
   const fullName = `${label}.phrs`;
   const node = ethers.namehash(fullName);
 
-  console.log(`🚀 Memulai registrasi '${fullName}'...`);
+  console.log(`\n🚀 Memulai registrasi '${fullName}'...`);
 
   const available = await registrar.available(label);
   if (!available) throw new Error("Domain tidak tersedia!");
+  console.log(`✅ Domain tersedia`);
 
   const secret = ethers.randomBytes(32);
   const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, owner, secret]);
@@ -53,30 +54,35 @@ async function registerDomain(label) {
   await sleep(delay * 1000);
 
   const price = await registrar.rentPrice(label, duration);
-  const resolver = new ethers.Interface(RESOLVER_ABI);
-  const data = [resolver.encodeFunctionData("setAddr", [node, owner])];
 
-  const registerTx = await registrar.register(
-    label,
-    owner,
-    duration,
-    secret,
-    PUBLIC_RESOLVER,
-    data,
-    false,
-    0,
-    { value: price }
-  );
+  const iface = new ethers.Interface(RESOLVER_ABI);
+  const data = [iface.encodeFunctionData("setAddr", [node, owner])];
 
-  await registerTx.wait();
-  console.log(`🎉 Berhasil mendaftarkan '${fullName}'`);
-  console.log(`🔗 TX Hash: ${registerTx.hash}`);
+  try {
+    const registerTx = await registrar.register(
+      label,
+      owner,
+      duration,
+      secret,
+      PUBLIC_RESOLVER,
+      data,
+      false,
+      0,
+      { value: price }
+    );
+
+    await registerTx.wait();
+    console.log(`🎉 Domain berhasil terdaftar, TX: ${registerTx.hash}`);
+  } catch (err) {
+    console.error("\n⛔️ Debug Revert:", err.reason);
+    console.error("🔥 ERROR:", err.message);
+  }
 }
 
 (async () => {
   try {
-    await registerDomain("domainbarkuu"); // GANTI dengan nama domain target
+    await registerDomain("domainbarkuu");
   } catch (err) {
-    console.error("🔥 ERROR:", err.reason || err.message || err);
+    console.error("🔥 ERROR:", err.message);
   }
 })();
