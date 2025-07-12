@@ -1,84 +1,107 @@
-// bot.js - versi final untuk Ethers v6
+// bot.js - Versi Final untuk Ethers v6
 import 'dotenv/config'
-import { ethers, Interface, isError } from 'ethers'
+import { ethers, namehash, Interface } from 'ethers'
+import { readFile } from 'fs/promises'
 
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL
 const PRIVATE_KEY = process.env.PRIVATE_KEY
-
 const REGISTRAR_ADDR = '0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175'
 const PUBLIC_RESOLVER = '0x9a43dcA1C3BB268546b98eb2AB1401bFc5b58505'
 
-// ABI yang digunakan
+// ✅ ABI harus tepat dan lowercase function name
 const REGISTRAR_ABI = [
   'function available(string) view returns (bool)',
   'function commitments(bytes32) view returns (uint256)',
   'function minCommitmentAge() view returns (uint256)',
   'function rentPrice(string,uint256) view returns (uint256)',
   'function commit(bytes32)',
-  'function register(string,address,uint256,bytes32,address,bytes[],bool,uint16) payable',
+  'function register(string,address,uint256,bytes32,address,bytes[],bool,uint16) payable'
 ]
-const RESOLVER_ABI = ['function setAddr(bytes32 node, address a)']
+
+const RESOLVER_ABI = [
+  'function setAddr(bytes32 node, address a)'
+]
 
 const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL)
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider)
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet)
+const resolverInterface = new Interface(RESOLVER_ABI)
 
-const sleep = (ms) => new Promise((res) => setTimeout(res, ms))
-
-const secret = ethers.randomBytes(32) // 32-byte buffer yang sama
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
+const secret = ethers.randomBytes(32)
 
 async function registerDomain(label) {
   const owner = await wallet.getAddress()
-  const duration = 31536000 // 1 tahun
-  const full = `${label}.phrs`
-  const node = ethers.namehash(full)
+  const duration = 31536000
+  const fullName = `${label}.phrs`
+  const node = namehash(fullName)
 
-  console.log(`🚀 Mulai registrasi '${full}'`)
+  console.log(`\n🚀 Mulai registrasi '${fullName}'`)
 
   const available = await registrar.available(label)
   if (!available) throw new Error('Domain tidak tersedia')
   console.log('✅ Domain tersedia')
 
-  const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, owner, secret])
+  const commitment = ethers.solidityPackedKeccak256(
+    ['string', 'address', 'bytes32'],
+    [label, owner, secret]
+  )
+
   const txCommit = await registrar.commit(commitment)
   await txCommit.wait()
   console.log(`✅ Commit tx: ${txCommit.hash}`)
 
-  const commitTime = await registrar.commitments(commitment)
-  const current = await provider.getBlock('latest')
-  const minWait = Number(await registrar.minCommitmentAge())
-  const waitSec = Math.max(0, minWait - (current.timestamp - Number(commitTime))) + 15
-
-  console.log(`⏱ Menunggu ${waitSec} detik...`)
-  await sleep(waitSec * 1000)
+  const commitTime = Number(await registrar.commitments(commitment))
+  const now = (await provider.getBlock('latest')).timestamp
+  const waitTime = Math.max(0, (await registrar.minCommitmentAge()) - (now - commitTime)) + 15
+  console.log(`⏱ Menunggu ${waitTime} detik...`)
+  await sleep(waitTime * 1000)
 
   const price = await registrar.rentPrice(label, duration)
 
-  const resolverInterface = new Interface(RESOLVER_ABI)
-  const data = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
-  console.log('✅ Data payload siap:', data)
+  const dataPayload = [
+    resolverInterface.encodeFunctionData('setAddr', [node, owner])
+  ]
+  console.log('✅ Data payload siap:', dataPayload)
 
+  // ✅ Optional Pre-check
   console.log('🔍 Pre-check callStatic.register...')
-  try {
-    await registrar.callStatic.register(label, owner, duration, secret, PUBLIC_RESOLVER, data, false, 0, {
-      value: price,
-    })
-  } catch (err) {
-    console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
-    console.error('   - Pesan:', isError(err) ? err.message : err)
-    return
+  if (!('register' in registrar.callStatic)) {
+    throw new Error('ABI tidak mengenali fungsi register() — pastikan ABI benar')
   }
 
-  console.log('🚀 Transaksi register dikirim...')
-  const tx = await registrar.register(label, owner, duration, secret, PUBLIC_RESOLVER, data, false, 0, {
-    value: price,
-  })
-  await tx.wait()
+  await registrar.callStatic.register(
+    label,
+    owner,
+    duration,
+    secret,
+    PUBLIC_RESOLVER,
+    dataPayload,
+    false,
+    0,
+    { value: price }
+  )
 
-  console.log(`🎉 Sukses! Domain '${full}' terdaftar.`)
-  console.log(`🔗 Tx: ${tx.hash}`)
+  const txRegister = await registrar.register(
+    label,
+    owner,
+    duration,
+    secret,
+    PUBLIC_RESOLVER,
+    dataPayload,
+    false,
+    0,
+    { value: price }
+  )
+
+  await txRegister.wait()
+  console.log(`\n🎉 DOMAIN BERHASIL TERDAFTAR!`)
+  console.log(`🔗 TX HASH: ${txRegister.hash}`)
 }
 
-registerDomain('gunayuku').catch((err) => {
-  console.error('❌ Fatal error:', err.message)
+// ✅ Jalankan
+const label = 'gyttuku'
+registerDomain(label).catch(err => {
+  console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
+  console.error(`   - Pesan: ${err.reason || err.message}`)
 })
