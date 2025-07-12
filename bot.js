@@ -1,4 +1,4 @@
-// bot.js - Skrip Final dengan Dua Metode Panggilan
+// bot.js - Skrip Final dengan Metode Panggilan Ganda
 
 import 'dotenv/config'
 import { ethers, namehash, Interface } from 'ethers'
@@ -13,20 +13,20 @@ const REGISTRAR_ABI = [
   'function available(string) view returns (bool)',
   'function minCommitmentAge() view returns (uint256)',
   'function rentPrice(string,uint256) view returns (uint256)',
-  // 'Commit' dengan C besar, sesuai bukti input data
+  // 'Commit' dengan C besar untuk panggilan langsung
   'function Commit(bytes32)',
-  // 'multicall' dengan m kecil, sesuai bukti input data
+  // 'multicall' dengan m kecil untuk panggilan kedua
   'function multicall(bytes[]) payable',
-  // 'Register' dengan R besar, untuk di-encode di dalam multicall
+  // 'Register' dengan R besar untuk di-encode
   'function Register(string,address,uint256,bytes32,address,bytes[],bool,uint16) payable'
 ]
-
 const RESOLVER_ABI = ['function setAddr(bytes32 node, address a)']
 
 const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL)
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider)
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet)
-const registrarInterface = new Interface(REGISTRAR_ABI) // Digunakan untuk encode
+const registrarInterface = new Interface(REGISTRAR_ABI)
+const resolverInterface = new Interface(RESOLVER_ABI)
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const secret = ethers.randomBytes(32)
@@ -44,7 +44,7 @@ async function registerDomain(label) {
 
   const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, owner, secret])
 
-  // --- Langkah 1: Panggilan COMMIT Langsung ---
+  // --- Langkah 1: Panggilan COMMIT Langsung (Sesuai Bukti #1) ---
   console.log('1️⃣ Mengirim transaksi "Commit" langsung...')
   const txCommit = await registrar.Commit(commitment)
   await txCommit.wait()
@@ -55,12 +55,10 @@ async function registerDomain(label) {
   console.log(`⏱  Menunggu ${waitTime} detik...`)
   await sleep(waitTime * 1000)
 
-  // --- Langkah 3: Panggilan REGISTER via Multicall ---
+  // --- Langkah 3: Panggilan REGISTER via Multicall (Sesuai Bukti #2) ---
   const price = await registrar.rentPrice(label, duration)
-  const resolverInterface = new Interface(RESOLVER_ABI)
   const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
-
-  // Encode data untuk fungsi 'Register'
+  
   const registerCallData = registrarInterface.encodeFunctionData('Register', [
     label, owner, duration, secret, PUBLIC_RESOLVER,
     dataForResolver, false, 0
@@ -68,18 +66,15 @@ async function registerDomain(label) {
   console.log('✅ Data untuk Register siap dibungkus dalam multicall')
 
   console.log('2️⃣ Mengirim transaksi "multicall(Register)"...')
-  const txRegister = await registrar.multicall(
-    [registerCallData],
-    { value: price }
-  )
+  const txRegister = await registrar.multicall([registerCallData], { value: price })
 
   await txRegister.wait()
   console.log(`\n🎉 DOMAIN BERHASIL TERDAFTAR!`)
   console.log(`   Tx Hash: ${txRegister.hash}`)
 }
 
-// --- EKSEKUSI ---
-const newLabel = 'patnerjuaraselalu'
+// Ganti label dan jalankan
+const newLabel = 'partnerjuara'
 registerDomain(newLabel).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan: ${err.reason || err.message}`)
