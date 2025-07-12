@@ -1,4 +1,4 @@
-// bot.js - Skrip Final Pamungkas
+// bot.js - Skrip Definitif Final
 
 // 1. Impor & Konfigurasi
 require('dotenv').config();
@@ -8,13 +8,14 @@ const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 
-// 2. ABI Definitif (Semua PascalCase)
+// 2. ABI Definitif (dengan signature 'commit' yang benar)
 const REGISTRAR_ABI = [
-    "function Available(string memory name) view returns(bool)",
-    "function MinCommitmentAge() view returns (uint256)",
-    "function RentPrice(string memory name, uint256 duration) view returns(uint256)",
-    "function Commit(bytes32 commitment) external",
-    "function Resolver() view returns (address)",
+    "function available(string memory name) view returns(bool)",
+    "function minCommitmentAge() view returns (uint256)",
+    "function rentPrice(string memory name, uint256 duration) view returns(uint256)",
+    // PERUBAHAN UTAMA: Signature 'commit' yang benar dengan 2 argumen
+    "function commit(bytes32 commitment, bytes calldata data) external",
+    "function resolver() view returns (address)",
     "function Register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable"
 ];
 const RESOLVER_ABI = [
@@ -36,35 +37,31 @@ async function registerDomain(label) {
 
     try {
         const ownerAddress = await wallet.getAddress();
-        const duration = 31536000; // 1 tahun
+        const duration = 31536000;
 
-        // LANGKAH 1: Cek Ketersediaan
+        // LANGKAH 1 & 2: Ketersediaan & Komitmen
         console.log("[1/5] Mengecek ketersediaan...");
-        const isAvailable = await contract.Available(label);
-        if (!isAvailable) throw new Error(`Domain '${label}' tidak tersedia.`);
-        console.log("✅ Domain tersedia.");
-
-        // LANGKAH 2: Buat Komitmen
-        console.log("[2/5] Membuat komitmen...");
+        if (!(await contract.available(label))) throw new Error(`Domain '${label}' tidak tersedia.`);
         const secret = ethers.randomBytes(32);
         const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, ownerAddress, secret]);
         console.log("✅ Komitmen dibuat.");
 
-        // LANGKAH 3: Commit
-        console.log("[3/5] Mengirim transaksi 'Commit'...");
-        const commitTx = await contract.Commit(commitment);
+        // LANGKAH 3: Commit dengan 2 Argumen
+        console.log("[3/5] Mengirim transaksi 'commit'...");
+        // PERUBAHAN UTAMA: Kirim dengan argumen kedua sebagai bytes kosong "0x"
+        const commitTx = await contract.commit(commitment, "0x");
         await commitTx.wait();
         console.log(`✅ Commit berhasil: ${commitTx.hash}`);
 
         // LANGKAH 4: Menunggu
-        const waitTime = Number(await contract.MinCommitmentAge()) + 15;
+        const waitTime = Number(await contract.minCommitmentAge()) + 15;
         console.log(`[4/5] Menunggu selama ${waitTime} detik...`);
         await sleep(waitTime * 1000);
 
         // LANGKAH 5: Registrasi Final
         console.log("[5/5] Mempersiapkan registrasi final...");
-        const price = await contract.RentPrice(label, duration);
-        const resolverAddress = await contract.Resolver();
+        const price = await contract.rentPrice(label, duration);
+        const resolverAddress = await contract.resolver();
         const node = ethers.namehash(fullNormalizedName);
         const resolverInterface = new ethers.Interface(RESOLVER_ABI);
         const dataPayload = [resolverInterface.encodeFunctionData("setAddr", [node, ownerAddress])];
@@ -82,13 +79,9 @@ async function registerDomain(label) {
 
     } catch (error) {
         console.error("\n🔥🔥🔥 GAGAL 🔥🔥🔥");
-        if (error.revert) {
-            console.error("   - Alasan dari Kontrak:", error.revert.args.join(', '));
-        } else {
-            console.error("   - Pesan:", error.reason || error.message);
-        }
+        console.error(error.reason || error.message);
     }
 }
 
 // Ganti label di bawah ini dan jalankan
-registerDomain("patjuara");
+registerDomain("patnerjuarafinal");
