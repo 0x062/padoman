@@ -72,7 +72,7 @@ async function registerDomain(label) {
         const dataPayload = [resolverInterface.encodeFunctionData("setAddr", [node, ownerAddress])];
         
         console.log("   - Mengirim transaksi 'Register' (dengan 'R' besar)...");
-        const registerTx = await contract.Register(
+        const registerTx = await contract.register(
             label, ownerAddress, duration, secret, 
             PUBLIC_RESOLVER_ADDRESS, // Resolver yang benar
             dataPayload, false, 0, { value: price }
