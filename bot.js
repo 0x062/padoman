@@ -79,6 +79,6 @@ async function registerDomain(label) {
   console.log(`🔗 Tx: ${tx.hash}`)
 }
 
-registerDomain('gunakanituku').catch((err) => {
+registerDomain('gunayuku').catch((err) => {
   console.error('❌ Fatal error:', err.message)
 })
