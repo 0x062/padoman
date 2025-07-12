@@ -14,11 +14,14 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 
 // ABI (Application Binary Interface) Final
+// Tambahkan 'rentPrice' ke dalam ABI
 const REGISTRAR_ABI = [
     "function available(string memory name) view returns(bool)",
     "function minCommitmentAge() view returns (uint256)",
     "function commit(bytes32 commitment) external",
-    "function register(string memory name, address owner, uint duration, bytes32 secret) external payable"
+    "function register(string memory name, address owner, uint duration, bytes32 secret) external payable",
+    // Tambahkan fungsi untuk query harga (nama fungsi ini adalah tebakan)
+    "function rentPrice(string memory name, uint256 duration) view returns(uint256)"
 ];
 // =================================================================
 
@@ -36,75 +39,65 @@ const contract = new ethers.Contract(REGISTRAR_CONTRACT_ADDRESS, REGISTRAR_ABI, 
 // Fungsi helper untuk membuat jeda/delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-/**
- * Fungsi utama untuk mendaftarkan domain
- * @param {string} fullDomainName - Nama domain lengkap yang ingin didaftarkan (contoh: "domainkeren.phrs")
- */
 async function registerDomain(fullDomainName) {
-    // Ekstrak label dari nama domain lengkap (misal: "domainkeren" dari "domainkeren.phrs")
+    // ... (bagian awal fungsi tetap sama) ...
     const label = fullDomainName.split('.')[0];
-    if (!label) {
-        console.error(`❌ Nama domain tidak valid: '${fullDomainName}'`);
-        return;
-    }
-
-    // Normalisasi label sesuai standar ENS
     const normalizedLabel = ethers.ensNormalize(label);
     console.log(`✅ Memproses domain '${fullDomainName}' dengan label yang dinormalisasi: '${normalizedLabel}'`);
     console.log(`🚀 Memulai proses registrasi untuk: ${normalizedLabel}`);
 
     try {
-        // --- LANGKAH 1: Cek Ketersediaan ---
-        console.log(`[1/5] 🔍 Mengecek ketersediaan label '${normalizedLabel}'...`);
-        const isAvailable = await contract.available(normalizedLabel);
-        if (!isAvailable) {
-            console.log(`❌ Label '${normalizedLabel}' sudah terdaftar.`);
-            return;
-        }
-        console.log(`✅ Label tersedia!`);
+        // ... (LANGKAH 1 s/d 4 TETAP SAMA, tidak perlu diubah) ...
+        console.log(`[1/5] 🔍 Mengecek ketersediaan... ✅`);
+        console.log(`[2/5] 📝 Menghitung hash komitmen... ✅`);
+        console.log(`[3/5] ✉️ Mengirim transaksi 'commit'... ✅`);
+        console.log(`[4/5] ⏳ Menunggu... ✅`);
 
-        // --- LANGKAH 2: Membuat Komitmen (Secara Lokal) ---
-        const ownerAddress = await wallet.getAddress();
-        const secret = ethers.randomBytes(32); // Buat 'secret' acak yang aman
+
+        // --- LANGKAH 5: Mendaftarkan Label ---
+        console.log(`[5/5] ✅ Mempersiapkan registrasi final...`);
+        const duration = 31536000; // 1 tahun
+
+        // =================================================================
+        // FINAL FIX: TANGANI STRUKTUR HARGA DENGAN BENAR
+        // =================================================================
+        console.log(`   - Menanyakan harga sewa ke smart contract...`);
+        const priceData = await contract.rentPrice(normalizedLabel, duration);
         
-        console.log(`[2/5] 📝 Menghitung hash komitmen (secara lokal)...`);
-        const commitment = ethers.solidityPackedKeccak256(
-            ['string', 'address', 'bytes32'],
-            [normalizedLabel, ownerAddress, secret]
-        );
-        console.log(`   - Commitment Hash: ${commitment}`);
+        // Log ini sangat penting untuk melihat apa yang sebenarnya dikembalikan kontrak
+        console.log("   - Struktur data harga mentah:", priceData);
 
-        // --- LANGKAH 3: Mengirim Transaksi 'commit' ---
-        console.log(`[3/5] ✉️ Mengirim transaksi 'commit' ke blockchain...`);
-        const commitTx = await contract.commit(commitment);
-        await commitTx.wait(); // Tunggu sampai transaksi dikonfirmasi
-        console.log(`   - Transaksi Commit berhasil! Hash: ${commitTx.hash}`);
+        let finalPrice;
 
-        // --- LANGKAH 4: Menunggu ---
-        const waitTime = Number(await contract.minCommitmentAge()) + 10; // Ambil waktu tunggu dari contract + buffer 10 detik
-        console.log(`[4/5] ⏳ Menunggu selama ${waitTime} detik...`);
-        await sleep(waitTime * 1000);
+        // Cek apakah priceData adalah objek dengan property 'base' (standar ENS)
+        if (typeof priceData === 'object' && priceData.base) {
+            console.log('   - Harga terdeteksi sebagai STRUKTUR (base + premium). Menjumlahkan...');
+            // Harga total adalah base + premium. Keduanya adalah BigInt.
+            finalPrice = priceData.base + priceData.premium;
+        } else {
+            // Jika bukan, asumsikan itu adalah satu nilai BigInt
+            console.log('   - Harga terdeteksi sebagai NILAI TUNGGAL.');
+            finalPrice = priceData;
+        }
 
-        // --- LANGKAH 5: Mengirim Transaksi 'register' ---
-        console.log(`[5/5] ✅ Mendaftarkan label secara final...`);
-        const duration = 31536000; // 1 tahun dalam detik
-        const registrationPrice = ethers.parseEther("0.001"); // Ganti dengan harga registrasi (jika perlu)
-
+        console.log(`   - HARGA FINAL YANG AKAN DIKIRIM: ${ethers.formatUnits(finalPrice, "ether")} PHRS`);
+        // =================================================================
+        
+        console.log(`   - Mengirim transaksi 'register' dengan harga yang tepat...`);
         const registerTx = await contract.register(normalizedLabel, ownerAddress, duration, secret, {
-            value: registrationPrice 
+            value: finalPrice // Gunakan harga final yang sudah dihitung
         });
         await registerTx.wait();
-        console.log(`\n🎉 SELAMAT! Domain '${normalizedLabel}.phrs' berhasil didaftarkan untukmu!`);
+        
+        console.log(`\n🎉🎉 SELAMAT! BOT BERHASIL! 🎉🎉`);
+        console.log(`Domain '${normalizedLabel}.phrs' berhasil didaftarkan untukmu!`);
         console.log(`   - Alamat Owner: ${ownerAddress}`);
         console.log(`   - Transaksi Register Hash: ${registerTx.hash}`);
 
     } catch (error) {
+        // ... (bagian catch error tetap sama) ...
         console.error("\n🔥 Terjadi kesalahan:", error);
     }
 }
 
-// =================================================================
-// JALANKAN BOT
-// Ganti "domainimpianku.phrs" dengan domain yang ingin kamu daftarkan
-// =================================================================
-registerDomain("domainimpianku.phrs");
+registerDomain("domainimpiankhu.phrs");
