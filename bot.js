@@ -1,4 +1,4 @@
-// bot.js - Skrip Final Sebenarnya
+// bot.js - Skrip Final Pamungkas
 
 // 1. Impor & Konfigurasi
 require('dotenv').config();
@@ -9,16 +9,15 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 const PUBLIC_RESOLVER_ADDRESS = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
 
-// 2. ABI dengan Mixed Case yang Benar
+// 2. ABI dengan Semua Fungsi camelCase
 const REGISTRAR_ABI = [
-    // camelCase untuk fungsi dasar
     "function available(string memory name) view returns(bool)",
     "function minCommitmentAge() view returns (uint256)",
     "function rentPrice(string memory name, uint256 duration) view returns(uint256)",
     "function commit(bytes32 commitment) external",
     "function resolver() view returns (address)",
-    // PascalCase untuk fungsi kompleks
-    "function Register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable"
+    // PERUBAHAN FINAL: Menggunakan 'register' dengan r kecil
+    "function register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable"
 ];
 const RESOLVER_ABI = [
     "function setAddr(bytes32 node, address a)"
@@ -53,7 +52,7 @@ async function registerDomain(label) {
         const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, ownerAddress, secret]);
         console.log("✅ Komitmen dibuat.");
 
-        // LANGKAH 3: Commit (dengan 'c' kecil)
+        // LANGKAH 3: Commit
         console.log("[3/5] Mengirim transaksi 'commit'...");
         const commitTx = await contract.commit(commitment);
         await commitTx.wait();
@@ -71,11 +70,18 @@ async function registerDomain(label) {
         const resolverInterface = new ethers.Interface(RESOLVER_ABI);
         const dataPayload = [resolverInterface.encodeFunctionData("setAddr", [node, ownerAddress])];
         
-        console.log("   - Mengirim transaksi 'Register' (dengan 'R' besar)...");
+        console.log("   - Mengirim transaksi 'register'...");
+        // PERUBAHAN FINAL: Memanggil 'register' dengan r kecil
         const registerTx = await contract.register(
-            label, ownerAddress, duration, secret, 
-            PUBLIC_RESOLVER_ADDRESS, // Resolver yang benar
-            dataPayload, false, 0, { value: price }
+            label, 
+            ownerAddress, 
+            duration, 
+            secret, 
+            PUBLIC_RESOLVER_ADDRESS, 
+            dataPayload, 
+            false, 
+            0, 
+            { value: price }
         );
         await registerTx.wait();
         
@@ -90,4 +96,4 @@ async function registerDomain(label) {
 }
 
 // Ganti label di bawah ini dan jalankan
-registerDomain("finalpatner");
+registerDomain("patnerfinal");
