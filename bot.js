@@ -80,7 +80,7 @@ async function registerDomain(label) {
             PUBLIC_RESOLVER_ADDRESS, 
             dataPayload, 
             false, 
-            0, 
+            196608, 
             { value: price }
         );
         await registerTx.wait();
