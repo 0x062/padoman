@@ -18,19 +18,23 @@ const REGISTRAR_ABI = [
   "function resolver() view returns (address)",
   "function register(string name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] data, bool reverseRecord, uint16 ownerControlledFuses) payable"
 ];
-const RESOLVER_ABI = ["function setAddr(bytes32 node, address a)"];
+const RESOLVER_ABI = [
+  "function setAddr(bytes32 node, address a)"
+];
 
-// 3. Setup provider & kontrak\if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
+// 3. Setup provider & kontrak
+if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
   throw new Error("Harap isi PHAROS_RPC_URL dan PRIVATE_KEY di .env");
 }
+
 const provider  = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
 const wallet    = new ethers.Wallet(PRIVATE_KEY, provider);
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
-// Helper
-const sleep = ms => new Promise(r => setTimeout(r, ms));
+// Helper: delay
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// Debug helper: callStatic untuk register
+// Debug: callStatic untuk register
 async function debugRegister(label, owner, duration, secret, price) {
   const fullName = `${label}.phrs`;
   const node     = ethers.namehash(fullName);
@@ -55,12 +59,13 @@ async function debugRegister(label, owner, duration, secret, price) {
   }
 }
 
-// Main function
+// Main: registrasi domain
 async function registerDomain(label) {
   console.log(`🚀 Mulai registrasi '${label}.phrs'`);
 
+  // Persiapan
   const owner    = await wallet.getAddress();
-  const duration = 31536000;
+  const duration = 31536000; // 1 tahun
   const fullName = `${label}.phrs`;
 
   // Validasi resolver onchain
@@ -72,7 +77,8 @@ async function registerDomain(label) {
 
   // 1. Cek availability
   console.log("[1/5] Mengecek ketersediaan...");
-  if (!(await registrar.available(label))) {
+  const available = await registrar.available(label);
+  if (!available) {
     throw new Error(`Domain '${fullName}' tidak tersedia`);
   }
   console.log("✅ Tersedia");
@@ -87,25 +93,25 @@ async function registerDomain(label) {
   console.log("✅ Komitmen siap");
 
   // 3. Submit commit
-  console.log("[3/5] Kirim commit tx...");
+  console.log("[3/5] Mengirim commit tx...");
   const txCommit = await registrar.commit(commitment);
   await txCommit.wait();
   console.log(`✅ Commit TX: ${txCommit.hash}`);
 
-  // 4. Tunggu minCommitmentAge + buffer
+  // 4. Tunggu waktu minimum
   const waitTime = Number(await registrar.minCommitmentAge()) + 15;
-  console.log(`[4/5] Tunggu ${waitTime}s...`);
+  console.log(`[4/5] Menunggu ${waitTime}s...`);
   await sleep(waitTime * 1000);
 
   // 5. Debug & Register
-  console.log("[5/5] Siapkan final registration...");
+  console.log("[5/5] Siapkan registrasi final...");
   const price = await registrar.rentPrice(label, duration);
 
-  // Jalankan callStatic untuk debug revert
+  // Debug callStatic
   await debugRegister(label, owner, duration, secret, price);
 
-  // Submit register tx
-  console.log("   - Kirim register tx...");
+  // Kirim register tx
+  console.log("   - Mengirim register tx...");
   const iface = new ethers.Interface(RESOLVER_ABI);
   const data  = [iface.encodeFunctionData("setAddr", [ethers.namehash(fullName), owner])];
   const txReg = await registrar.register(
@@ -119,12 +125,12 @@ async function registerDomain(label) {
     0,
     { value: price }
   );
-
   await txReg.wait();
-  console.log(`🎉 Domain '${fullName}' terdaftar: ${txReg.hash}`);
+
+  console.log(`🎉 Domain '${fullName}' berhasil terdaftar! TX: ${txReg.hash}`);
 }
 
-// Eksekusi dan tangani error
-registerDomain("patnerfinal").catch(err => {
+// Jalankan dan tangani error
+egisterDomain("patnerfinal").catch(err => {
   console.error("🔥 Fatal Error:", err.message || err);
 });
