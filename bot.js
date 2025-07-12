@@ -1,6 +1,8 @@
-// bot.js - Skrip Refactored dengan Debug & Validasi
+#!/usr/bin/env node
 
-// 1. Impor & Konfigurasi
+// bot.js - Skrip Refactored & Wrapped dalam IIFE
+// Pastikan menjalankannya dengan: node bot.js
+
 require('dotenv').config();
 const { ethers } = require('ethers');
 
@@ -9,7 +11,7 @@ const PRIVATE_KEY     = process.env.PRIVATE_KEY;
 const REGISTRAR_ADDR  = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 const PUBLIC_RESOLVER = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
 
-// 2. ABI
+// 1. ABI
 const REGISTRAR_ABI = [
   "function available(string name) view returns (bool)",
   "function commitments(bytes32 commitment) view returns (uint256)",
@@ -23,55 +25,65 @@ const RESOLVER_ABI = [
   "function setAddr(bytes32 node, address a)"
 ];
 
-// 3. Submit commit and debug timing
-  console.log("[3/5] Mengirim commit tx...");
-  const txCommit = await registrar.commit(commitment);
-  await txCommit.wait();
-  console.log(`✅ Commit TX: ${txCommit.hash}`);
+// Setup provider & kontrak
+if (!PHAROS_RPC_URL || !PRIVATE_KEY) throw new Error("PHAROS_RPC_URL dan PRIVATE_KEY harus diisi di .env");
+const provider  = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
+const wallet    = new ethers.Wallet(PRIVATE_KEY, provider);
+const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
-  // Ambil commitTime, current block, dan minAge
-  const commitTime = await registrar.commitments(commitment);
-  const block      = await provider.getBlock("latest");
-  const minAge     = await registrar.minCommitmentAge();
-  console.log(`🕒 commitTime: ${commitTime}`);
-  console.log(`🕒 block.timestamp before wait: ${block.timestamp}`);
-  console.log(`🔍 minCommitmentAge: ${minAge} detik`);
+// Helper
+const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-  // Hitung waktu tunggu sisa + buffer lebih besar
-  let waitTime = minAge - (block.timestamp - commitTime);
-  if (waitTime < 0) waitTime = 0;
-  // Tambah buffer 60 detik untuk keamanan
-  waitTime += 60;
-  console.log(`[4/5] Menunggu ${waitTime}s sebelum registrasi...`);
-  await sleep(waitTime * 1000);
-  // Cek timestamp pasca tunggu
-  const afterBlock = await provider.getBlock("latest");
-  console.log(`🕒 block.timestamp after wait: ${afterBlock.timestamp}`);
-
-  console.log("[5/5] Menjalankan final register...");
-
-  // 4. Debug & register final
-  console.log("[5/5] Mempersiapkan registrasi final...");
-  const price = await registrar.rentPrice(label, duration);
-  await debugRegister(label, owner, duration, secret, price);
-
-  console.log("   - Mengirim register tx...");
-  const iface = new ethers.Interface(RESOLVER_ABI);
-  const data  = [iface.encodeFunctionData("setAddr", [ethers.namehash(fullName), owner])];
-  const txReg = await registrar.register(
-    label,
-    owner,
-    duration,
-    secret,
-    PUBLIC_RESOLVER,
-    data,
-    false,
-    0,
-    { value: price }
-  );
-  await txReg.wait();
-  console.log(`🎉 Domain '${fullName}' berhasil terdaftar! TX: ${txReg.hash}`);
+// Debug: callStatic untuk register\async function debugRegister(label, owner, duration, secret, price) {
+  const node  = ethers.namehash(`${label}.phrs`);
+  const data  = [new ethers.Interface(RESOLVER_ABI).encodeFunctionData("setAddr", [node, owner])];
+  try {
+    await registrar.callStatic.register(label, owner, duration, secret, PUBLIC_RESOLVER, data, false, 0, { value: price });
+  } catch (e) {
+    console.error("⛔️ Debug Revert:", e.errorName || e.reason || e.data);
+    throw e;
+  }
 }
 
-// Jalankan dan tangani error
-registerDomain("patnerfinal").catch(err => console.error("🔥 Fatal Error:", err.message || err));
+// Main
+async function registerDomain(label) {
+  console.log(`🚀 Registrasi '${label}.phrs' dimulai`);
+  const owner    = await wallet.getAddress();
+  const duration = 31536000;
+
+  // 1. Cek availability
+  if (!(await registrar.available(label))) throw new Error('Domain tidak tersedia');
+  console.log('✅ Available');
+
+  // 2. Komitmen
+  const secret     = ethers.randomBytes(32);
+  const commitment = ethers.solidityPackedKeccak256(['string','address','bytes32'], [label, owner, secret]);
+  await registrar.commit(commitment);
+  console.log('✅ Commit dikirim');
+
+  // Debug timing
+  const commitTime = await registrar.commitments(commitment);
+  const block1     = await provider.getBlock('latest');
+  const minAge     = await registrar.minCommitmentAge();
+  let waitTime     = Math.max(0, minAge - (block1.timestamp - commitTime)) + 60;
+  console.log(`⏱ Menunggu ${waitTime}s`);
+  await sleep(waitTime * 1000);
+
+  // 3. Final register
+  const price = await registrar.rentPrice(label, duration);
+  await debugRegister(label, owner, duration, secret, price);
+  const node  = ethers.namehash(`${label}.phrs`);
+  const data  = [new ethers.Interface(RESOLVER_ABI).encodeFunctionData("setAddr", [node, owner])];
+  const tx    = await registrar.register(label, owner, duration, secret, PUBLIC_RESOLVER, data, false, 0, { value: price });
+  await tx.wait();
+  console.log(`🎉 Sukses: ${tx.hash}`);
+}
+
+// IIFE Entry Point
+(async () => {
+  try {
+    await registerDomain('patnerfinal');
+  } catch (err) {
+    console.error('🔥 Fatal Error:', err.message || err);
+  }
+})();
