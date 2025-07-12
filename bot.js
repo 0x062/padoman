@@ -1,4 +1,4 @@
-// bot.js - Skrip Final Pamungkas
+// bot.js - Skrip Final Sebenarnya
 
 // 1. Impor & Konfigurasi
 require('dotenv').config();
@@ -7,16 +7,17 @@ const { ethers } = require('ethers');
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
-
-// Alamat Resolver yang BENAR, berdasarkan bukti dari MetaMask Anda
 const PUBLIC_RESOLVER_ADDRESS = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
 
-// 2. ABI Definitif
+// 2. ABI dengan Mixed Case yang Benar
 const REGISTRAR_ABI = [
+    // camelCase untuk fungsi dasar
     "function available(string memory name) view returns(bool)",
     "function minCommitmentAge() view returns (uint256)",
     "function rentPrice(string memory name, uint256 duration) view returns(uint256)",
-    "function Commit(bytes32 commitment) external", // Dibenarkan menjadi 1 argumen
+    "function commit(bytes32 commitment) external",
+    "function resolver() view returns (address)",
+    // PascalCase untuk fungsi kompleks
     "function Register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable"
 ];
 const RESOLVER_ABI = [
@@ -40,7 +41,7 @@ async function registerDomain(label) {
         const ownerAddress = await wallet.getAddress();
         const duration = 31536000;
 
-        // LANGKAH 1: Cek Ketersediaan (menggunakan 'a' kecil, asumsi paling aman)
+        // LANGKAH 1: Cek Ketersediaan
         console.log("[1/5] Mengecek ketersediaan...");
         const isAvailable = await contract.available(label);
         if (!isAvailable) throw new Error(`Domain '${label}' tidak tersedia.`);
@@ -52,9 +53,9 @@ async function registerDomain(label) {
         const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, ownerAddress, secret]);
         console.log("✅ Komitmen dibuat.");
 
-        // LANGKAH 3: Commit (dengan 'C' besar dan 1 argumen)
-        console.log("[3/5] Mengirim transaksi 'Commit'...");
-        const commitTx = await contract.Commit(commitment);
+        // LANGKAH 3: Commit (dengan 'c' kecil)
+        console.log("[3/5] Mengirim transaksi 'commit'...");
+        const commitTx = await contract.commit(commitment);
         await commitTx.wait();
         console.log(`✅ Commit berhasil: ${commitTx.hash}`);
 
@@ -70,17 +71,11 @@ async function registerDomain(label) {
         const resolverInterface = new ethers.Interface(RESOLVER_ABI);
         const dataPayload = [resolverInterface.encodeFunctionData("setAddr", [node, ownerAddress])];
         
-        console.log("   - Mengirim transaksi 'Register' dengan resolver yang benar...");
+        console.log("   - Mengirim transaksi 'Register' (dengan 'R' besar)...");
         const registerTx = await contract.Register(
-            label, 
-            ownerAddress, 
-            duration, 
-            secret, 
-            PUBLIC_RESOLVER_ADDRESS, // PERUBAHAN UTAMA: Menggunakan alamat resolver yang benar
-            dataPayload, 
-            false, 
-            0, 
-            { value: price }
+            label, ownerAddress, duration, secret, 
+            PUBLIC_RESOLVER_ADDRESS, // Resolver yang benar
+            dataPayload, false, 0, { value: price }
         );
         await registerTx.wait();
         
@@ -95,4 +90,4 @@ async function registerDomain(label) {
 }
 
 // Ganti label di bawah ini dan jalankan
-registerDomain("patnerberhasil");
+registerDomain("finalpatner");
