@@ -1,4 +1,4 @@
-// bot.js - Skrip Definitif Final
+// bot.js - Skrip Final Pamungkas
 
 // 1. Impor & Konfigurasi
 require('dotenv').config();
@@ -8,14 +8,15 @@ const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 
-// 2. ABI Definitif (dengan signature 'commit' yang benar)
+// Alamat Resolver yang BENAR, berdasarkan bukti dari MetaMask Anda
+const PUBLIC_RESOLVER_ADDRESS = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
+
+// 2. ABI Definitif
 const REGISTRAR_ABI = [
     "function available(string memory name) view returns(bool)",
     "function minCommitmentAge() view returns (uint256)",
     "function rentPrice(string memory name, uint256 duration) view returns(uint256)",
-    // PERUBAHAN UTAMA: Signature 'commit' yang benar dengan 2 argumen
-    "function commit(bytes32 commitment, bytes calldata data) external",
-    "function resolver() view returns (address)",
+    "function Commit(bytes32 commitment) external", // Dibenarkan menjadi 1 argumen
     "function Register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable"
 ];
 const RESOLVER_ABI = [
@@ -39,17 +40,21 @@ async function registerDomain(label) {
         const ownerAddress = await wallet.getAddress();
         const duration = 31536000;
 
-        // LANGKAH 1 & 2: Ketersediaan & Komitmen
+        // LANGKAH 1: Cek Ketersediaan (menggunakan 'a' kecil, asumsi paling aman)
         console.log("[1/5] Mengecek ketersediaan...");
-        if (!(await contract.available(label))) throw new Error(`Domain '${label}' tidak tersedia.`);
+        const isAvailable = await contract.available(label);
+        if (!isAvailable) throw new Error(`Domain '${label}' tidak tersedia.`);
+        console.log("✅ Domain tersedia.");
+
+        // LANGKAH 2: Buat Komitmen
+        console.log("[2/5] Membuat komitmen...");
         const secret = ethers.randomBytes(32);
         const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, ownerAddress, secret]);
         console.log("✅ Komitmen dibuat.");
 
-        // LANGKAH 3: Commit dengan 2 Argumen
-        console.log("[3/5] Mengirim transaksi 'commit'...");
-        // PERUBAHAN UTAMA: Kirim dengan argumen kedua sebagai bytes kosong "0x"
-        const commitTx = await contract.commit(commitment, "0x");
+        // LANGKAH 3: Commit (dengan 'C' besar dan 1 argumen)
+        console.log("[3/5] Mengirim transaksi 'Commit'...");
+        const commitTx = await contract.Commit(commitment);
         await commitTx.wait();
         console.log(`✅ Commit berhasil: ${commitTx.hash}`);
 
@@ -61,19 +66,25 @@ async function registerDomain(label) {
         // LANGKAH 5: Registrasi Final
         console.log("[5/5] Mempersiapkan registrasi final...");
         const price = await contract.rentPrice(label, duration);
-        const resolverAddress = await contract.resolver();
         const node = ethers.namehash(fullNormalizedName);
         const resolverInterface = new ethers.Interface(RESOLVER_ABI);
         const dataPayload = [resolverInterface.encodeFunctionData("setAddr", [node, ownerAddress])];
         
-        console.log("   - Mengirim transaksi 'Register'...");
+        console.log("   - Mengirim transaksi 'Register' dengan resolver yang benar...");
         const registerTx = await contract.Register(
-            label, ownerAddress, duration, secret, resolverAddress,
-            dataPayload, false, 0, { value: price }
+            label, 
+            ownerAddress, 
+            duration, 
+            secret, 
+            PUBLIC_RESOLVER_ADDRESS, // PERUBAHAN UTAMA: Menggunakan alamat resolver yang benar
+            dataPayload, 
+            false, 
+            0, 
+            { value: price }
         );
         await registerTx.wait();
         
-        console.log("\n🎉🎉🎉 PENDAFTARAN SUKSES! 🎉🎉🎉");
+        console.log("\n\n🎉🎉🎉 PENDAFTARAN SUKSES! 🎉🎉🎉");
         console.log(`Domain '${fullNormalizedName}' telah terdaftar.`);
         console.log(`Tx Hash: ${registerTx.hash}`);
 
@@ -84,4 +95,4 @@ async function registerDomain(label) {
 }
 
 // Ganti label di bawah ini dan jalankan
-registerDomain("patnerjuarafinal");
+registerDomain("patnerberhasil");
