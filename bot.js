@@ -14,6 +14,14 @@ const REGISTRAR_ABI = [
   "function available(string name) view returns (bool)",
   "function minCommitmentAge() view returns (uint256)",
   "function rentPrice(string name, uint256 duration) view returns (uint256)",
+  "function commitments(bytes32 commitment) view returns (uint256)",  // added to debug timing
+  "function commit(bytes32 commitment)",
+  "function resolver() view returns (address)",
+  "function register(string name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] data, bool reverseRecord, uint16 ownerControlledFuses) payable"
+];
+  "function available(string name) view returns (bool)",
+  "function minCommitmentAge() view returns (uint256)",
+  "function rentPrice(string name, uint256 duration) view returns (uint256)",
   "function commit(bytes32 commitment)",
   "function resolver() view returns (address)",
   "function register(string name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] data, bool reverseRecord, uint16 ownerControlledFuses) payable"
@@ -32,7 +40,7 @@ const wallet    = new ethers.Wallet(PRIVATE_KEY, provider);
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
 // Helper: delay
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)); => new Promise(resolve => setTimeout(resolve, ms));
 
 // Debug: callStatic untuk register
 async function debugRegister(label, owner, duration, secret, price) {
@@ -97,6 +105,22 @@ async function registerDomain(label) {
   const txCommit = await registrar.commit(commitment);
   await txCommit.wait();
   console.log(`✅ Commit TX: ${txCommit.hash}`);
+
+  // Debug: periksa waktu commit dan minCommitmentAge
+  const commitTime = await registrar.commitments(commitment);
+  const block = await provider.getBlock("latest");
+  const minAge = await registrar.minCommitmentAge();
+  console.log(`🕒 commitTime: ${commitTime} (timestamp)`);
+  console.log(`🕒 current blockTime: ${block.timestamp}`);
+  console.log(`🔍 minCommitmentAge: ${minAge} detik`);
+
+  // 4. Tunggu waktu minimum
+  const elapsed = block.timestamp - commitTime;
+  const waitTime = (minAge - elapsed > 0 ? minAge - elapsed : 0) + 15;
+  console.log(`[4/5] Menunggu ${waitTime}s...`);
+  await sleep(waitTime * 1000);
+
+  // Lanjut ke registration ${txCommit.hash}`);
 
   // 4. Tunggu waktu minimum
   const waitTime = Number(await registrar.minCommitmentAge()) + 15;
