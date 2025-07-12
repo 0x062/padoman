@@ -1,4 +1,4 @@
-// bot.js - Skrip Final menggunakan alur registrasi yang benar
+// bot.js - Skrip Final Lengkap
 
 // 1. Impor library yang dibutuhkan
 require('dotenv').config();
@@ -9,14 +9,14 @@ const { ethers } = require('ethers');
 // =================================================================
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175"; // Alamat Registrar
+const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 
 // ABI (Application Binary Interface) yang Diperbarui dan Disederhanakan
 const REGISTRAR_ABI = [
     // Fungsi untuk mendapatkan harga
     "function rentPrice(string memory name, uint256 duration) view returns(uint256)",
-    // Fungsi registrasi tingkat tinggi yang menangani semua langkah
-    "function registerAndWrapETH2LD(string calldata name, address wrappedOwner, uint256 duration, address resolver, uint16 ownerControlledFuses) external payable"
+    // Fungsi registrasi tingkat tinggi dengan nama yang benar
+    "function RegisterAndWrapETH2LD(string calldata name, address wrappedOwner, uint256 duration, address resolver, uint16 ownerControlledFuses) external payable"
 ];
 // =================================================================
 
@@ -46,14 +46,11 @@ async function registerDomain(label) {
         console.log(`   - Harga untuk 1 tahun: ${ethers.formatEther(price)} PHRS`);
 
         // Langkah 2: Panggil fungsi registrasi tingkat tinggi
-        // Kita asumsikan resolver dan fuses bisa menggunakan nilai default yang umum.
-        // Alamat resolver seringkali sama dengan alamat registrar itu sendiri.
-        // Fuses 0 berarti tidak ada batasan khusus (pengaturan default).
         const resolverAddress = REGISTRAR_CONTRACT_ADDRESS; 
         const fuses = 0;
 
-        console.log("[2/2] Mengirim transaksi final 'registerAndWrapETH2LD'...");
-        const tx = await contract.registerAndWrapETH2LD(
+        console.log("[2/2] Mengirim transaksi final 'RegisterAndWrapETH2LD'...");
+        const tx = await contract.RegisterAndWrapETH2LD(
             label,
             ownerAddress,
             duration,
@@ -77,5 +74,5 @@ async function registerDomain(label) {
     }
 }
 
-// Ganti nama domain di bawah ini dengan yang kamu inginkan (HANYA LABELNYA)
+// Ganti nama domain di bawah ini dengan yang Anda inginkan (HANYA LABELNYA)
 registerDomain("patnerbotjuara");
