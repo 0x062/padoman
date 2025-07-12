@@ -11,12 +11,12 @@ const PUBLIC_RESOLVER = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
 
 // 2. ABI
 const REGISTRAR_ABI = [
-  "function available(string name) view returns(bool)",
-  "function minCommitmentAge() view returns(uint256)",
-  "function rentPrice(string name, uint256 duration) view returns(uint256)",
+  "function available(string name) view returns (bool)",
+  "function minCommitmentAge() view returns (uint256)",
+  "function rentPrice(string name, uint256 duration) view returns (uint256)",
   "function commit(bytes32 commitment)",
-  "function resolver() view returns(address)",
-  "function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses) payable"
+  "function resolver() view returns (address)",
+  "function register(string name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] data, bool reverseRecord, uint16 ownerControlledFuses) payable"
 ];
 const RESOLVER_ABI = ["function setAddr(bytes32 node, address a)"];
 
@@ -24,15 +24,14 @@ const RESOLVER_ABI = ["function setAddr(bytes32 node, address a)"];
 if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
   throw new Error("Harap isi PHAROS_RPC_URL dan PRIVATE_KEY di .env");
 }
-const provider   = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
-const wallet     = new ethers.Wallet(PRIVATE_KEY, provider);
-const registrar  = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
+const provider  = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
+const wallet    = new ethers.Wallet(PRIVATE_KEY, provider);
+const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
 // Helper
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Debug helper: callStatic untuk register
-async function debugRegister(label, owner, duration, secret, price) {
+// Debug helper: callStatic untuk register\async function debugRegister(label, owner, duration, secret, price) {
   const fullName = `${label}.phrs`;
   const node     = ethers.namehash(fullName);
   const iface    = new ethers.Interface(RESOLVER_ABI);
@@ -47,16 +46,17 @@ async function debugRegister(label, owner, duration, secret, price) {
       PUBLIC_RESOLVER,
       data,
       false,
-      0,       // ownerControlledFuses = 0
+      0,
       { value: price }
     );
-  } catch(err) {
+  } catch (err) {
     console.error("⛔️ Debug Revert:", err.errorName || err.reason || err.data);
     throw err;
   }
 }
 
-// Main function\async function registerDomain(label) {
+// Main function
+async function registerDomain(label) {
   console.log(`🚀 Mulai registrasi '${label}.phrs'`);
 
   const owner    = await wallet.getAddress();
@@ -81,7 +81,7 @@ async function debugRegister(label, owner, duration, secret, price) {
   console.log("[2/5] Buat komitmen...");
   const secret     = ethers.randomBytes(32);
   const commitment = ethers.solidityPackedKeccak256(
-    ['string','address','bytes32'],
+    ['string', 'address', 'bytes32'],
     [label, owner, secret]
   );
   console.log("✅ Komitmen siap");
@@ -116,7 +116,7 @@ async function debugRegister(label, owner, duration, secret, price) {
     PUBLIC_RESOLVER,
     data,
     false,
-    0,              // ownerControlledFuses = 0
+    0,
     { value: price }
   );
 
@@ -124,5 +124,5 @@ async function debugRegister(label, owner, duration, secret, price) {
   console.log(`🎉 Domain '${fullName}' terdaftar: ${txReg.hash}`);
 }
 
-// Panggil fungsi
-registerDomain("patnerfinal");
+// Eksekusi dan tangani error
+egisterDomain("patnerfinal").catch(err => console.error(err));
