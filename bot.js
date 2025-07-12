@@ -88,18 +88,25 @@ async function registerDomain(label) {
   await txCommit.wait();
   console.log(`✅ Commit TX: ${txCommit.hash}`);
 
-  // Debug timing
-  const commitTime = await registrar.commitments(commitment);
-  const block1     = await provider.getBlock('latest');
-  const minAge     = await registrar.minCommitmentAge();
-  let waitTime     = Math.max(0, minAge - (block1.timestamp - commitTime)) + 60;
+  // 3. Debug timing and wait
+  const commitTimeBN = await registrar.commitments(commitment);
+  const block1       = await provider.getBlock('latest');
+  const minAgeBN     = await registrar.minCommitmentAge();
+  // Convert BigNumber to Number for calculation
+  const commitTime   = commitTimeBN.toNumber();
+  const minAge       = minAgeBN.toNumber();
+  const currentTime  = block1.timestamp;
+
+  let waitTime = Math.max(0, minAge - (currentTime - commitTime)) + 60;
   console.log(`⏱ Menunggu ${waitTime}s sebelum registrasi`);
   await sleep(waitTime * 1000);
 
-  // 3. Final register
+  // 4. Final register
   const price      = await registrar.rentPrice(label, duration);
   await debugRegister(label, owner, duration, secret, price);
-  const node       = ethers.namehash(`${label}.phrs`);
+
+  const fullName   = `${label}.phrs`;
+  const node       = ethers.namehash(fullName);
   const iface      = new ethers.Interface(RESOLVER_ABI);
   const data       = [iface.encodeFunctionData("setAddr", [node, owner])];
   const txRegister = await registrar.register(
