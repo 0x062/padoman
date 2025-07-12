@@ -21,14 +21,12 @@ const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-// Global secret
 const globalSecret = ethers.randomBytes(32);
 
 async function registerDomain(label) {
   const owner = await wallet.getAddress();
   const duration = 31536000;
   const fullName = `${label}.phrs`;
-  const node = ethers.namehash(fullName);
 
   console.log(`\n🚀 Memulai registrasi '${fullName}'...`);
 
@@ -51,11 +49,11 @@ async function registerDomain(label) {
   await sleep(delay * 1000);
 
   const price = await registrar.rentPrice(label, duration);
-  const data = []; // kosong sesuai transaksi sukses
+  const data = [];
 
   try {
     console.log("🔍 Melakukan pre-check dengan callStatic...");
-    await registrar.callStatic.register(
+    const staticResult = await registrar.callStatic["register"](
       label,
       owner,
       duration,
