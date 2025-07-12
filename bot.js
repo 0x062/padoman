@@ -23,90 +23,32 @@ const RESOLVER_ABI = [
   "function setAddr(bytes32 node, address a)"
 ];
 
-// 3. Setup provider & kontrak
-if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
-  throw new Error("Harap isi PHAROS_RPC_URL dan PRIVATE_KEY di .env");
-}
-const provider  = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
-const wallet    = new ethers.Wallet(PRIVATE_KEY, provider);
-const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
-
-// Helper: delay
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-
-// Debug helper: callStatic untuk register
-async function debugRegister(label, owner, duration, secret, price) {
-  const fullName = `${label}.phrs`;
-  const node     = ethers.namehash(fullName);
-  const iface    = new ethers.Interface(RESOLVER_ABI);
-  const data     = [iface.encodeFunctionData("setAddr", [node, owner])];
-  try {
-    await registrar.callStatic.register(
-      label,
-      owner,
-      duration,
-      secret,
-      PUBLIC_RESOLVER,
-      data,
-      false,
-      0,
-      { value: price }
-    );
-  } catch (err) {
-    console.error("⛔️ Debug Revert:", err.errorName || err.reason || err.data);
-    throw err;
-  }
-}
-
-// Main: registrasi domain
-async function registerDomain(label) {
-  console.log(`🚀 Mulai registrasi '${label}.phrs'`);
-  const owner    = await wallet.getAddress();
-  const duration = 31536000; // 1 tahun
-  const fullName = `${label}.phrs`;
-
-  // Validasi resolver onchain
-  const onchainResolver = await registrar.resolver();
-  console.log(`🔍 Resolver onchain: ${onchainResolver}`);
-  if (onchainResolver.toLowerCase() !== PUBLIC_RESOLVER.toLowerCase()) {
-    console.warn("⚠️ Address resolver mismatch dengan PUBLIC_RESOLVER");
-  }
-
-  // 1. Cek availability
-  console.log("[1/5] Mengecek ketersediaan...");
-  const available = await registrar.available(label);
-  if (!available) throw new Error(`Domain '${fullName}' tidak tersedia`);
-  console.log("✅ Domain tersedia");
-
-  // 2. Buat komitmen
-  console.log("[2/5] Buat komitmen...");
-  const secret     = ethers.randomBytes(32);
-  const commitment = ethers.solidityPackedKeccak256(
-    ['string', 'address', 'bytes32'],
-    [label, owner, secret]
-  );
-  console.log("✅ Komitmen dibuat");
-
-  // 3. Submit commit dan debug timing
+// 3. Submit commit and debug timing
   console.log("[3/5] Mengirim commit tx...");
   const txCommit = await registrar.commit(commitment);
   await txCommit.wait();
   console.log(`✅ Commit TX: ${txCommit.hash}`);
 
-  // Ambil timestamp commit dan block untuk cek timing
+  // Ambil commitTime, current block, dan minAge
   const commitTime = await registrar.commitments(commitment);
   const block      = await provider.getBlock("latest");
   const minAge     = await registrar.minCommitmentAge();
   console.log(`🕒 commitTime: ${commitTime}`);
-  console.log(`🕒 block.timestamp: ${block.timestamp}`);
+  console.log(`🕒 block.timestamp before wait: ${block.timestamp}`);
   console.log(`🔍 minCommitmentAge: ${minAge} detik`);
 
-  // Hitung waktu tunggu sisa
+  // Hitung waktu tunggu sisa + buffer lebih besar
   let waitTime = minAge - (block.timestamp - commitTime);
   if (waitTime < 0) waitTime = 0;
-  waitTime += 15;
-  console.log(`[4/5] Menunggu ${waitTime}s...`);
+  // Tambah buffer 60 detik untuk keamanan
+  waitTime += 60;
+  console.log(`[4/5] Menunggu ${waitTime}s sebelum registrasi...`);
   await sleep(waitTime * 1000);
+  // Cek timestamp pasca tunggu
+  const afterBlock = await provider.getBlock("latest");
+  console.log(`🕒 block.timestamp after wait: ${afterBlock.timestamp}`);
+
+  console.log("[5/5] Menjalankan final register...");
 
   // 4. Debug & register final
   console.log("[5/5] Mempersiapkan registrasi final...");
