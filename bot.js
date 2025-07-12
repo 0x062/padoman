@@ -1,14 +1,13 @@
 // bot.js - Skrip Refactored dengan Debug & Validasi
 
 // 1. Impor & Konfigurasi
-env (3) from .env (tip: ⚙️  write to custom object with { processEnv: myObject })
 require('dotenv').config();
 const { ethers } = require('ethers');
 
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL;
-const PRIVATE_KEY        = process.env.PRIVATE_KEY;
-const REGISTRAR_ADDRESS  = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
-const PUBLIC_RESOLVER    = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
+const PRIVATE_KEY     = process.env.PRIVATE_KEY;
+const REGISTRAR_ADDR  = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
+const PUBLIC_RESOLVER = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
 
 // 2. ABI
 const REGISTRAR_ABI = [
@@ -25,9 +24,9 @@ const RESOLVER_ABI = ["function setAddr(bytes32 node, address a)"];
 if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
   throw new Error("Harap isi PHAROS_RPC_URL dan PRIVATE_KEY di .env");
 }
-const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
-const wallet   = new ethers.Wallet(PRIVATE_KEY, provider);
-const registrar = new ethers.Contract(REGISTRAR_ADDRESS, REGISTRAR_ABI, wallet);
+const provider   = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
+const wallet     = new ethers.Wallet(PRIVATE_KEY, provider);
+const registrar  = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
 // Helper
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -48,7 +47,7 @@ async function debugRegister(label, owner, duration, secret, price) {
       PUBLIC_RESOLVER,
       data,
       false,
-      0,       // ownerControlledFuses coba 0 dulu
+      0,       // ownerControlledFuses = 0
       { value: price }
     );
   } catch(err) {
@@ -57,9 +56,8 @@ async function debugRegister(label, owner, duration, secret, price) {
   }
 }
 
-// Main
-async function registerDomain(label) {
-  console.log(`🚀 Mulai: registrasi '${label}.phrs'`);
+// Main function\async function registerDomain(label) {
+  console.log(`🚀 Mulai registrasi '${label}.phrs'`);
 
   const owner    = await wallet.getAddress();
   const duration = 31536000;
@@ -79,7 +77,7 @@ async function registerDomain(label) {
   }
   console.log("✅ Tersedia");
 
-  // 2. Buat commitment
+  // 2. Buat komitmen
   console.log("[2/5] Buat komitmen...");
   const secret     = ethers.randomBytes(32);
   const commitment = ethers.solidityPackedKeccak256(
@@ -118,7 +116,7 @@ async function registerDomain(label) {
     PUBLIC_RESOLVER,
     data,
     false,
-    0,           // ownerControlledFuses = 0
+    0,              // ownerControlledFuses = 0
     { value: price }
   );
 
