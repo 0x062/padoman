@@ -1,4 +1,4 @@
-// bot.js - Skrip Final dengan Koreksi Terakhir
+// bot.js - Skrip Final dengan Multicall
 
 // 1. Impor library
 require('dotenv').config();
@@ -9,15 +9,16 @@ const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 
-// 3. ABI dengan semua fungsi camelCase
+// 3. ABI Definitif
+// Kita butuh ABI untuk semua fungsi yang kita interaksikan atau kita encode
 const REGISTRAR_ABI = [
     "function available(string memory name) view returns(bool)",
     "function minCommitmentAge() view returns (uint256)",
     "function rentPrice(string memory name, uint256 duration) view returns(uint256)",
     "function commit(bytes32 commitment) external",
     "function resolver() view returns (address)",
-    // PERUBAHAN FINAL: Menggunakan 'register' dengan r kecil
-    "function register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable"
+    "function Register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable",
+    "function multicall(bytes[] calldata data) external payable"
 ];
 const RESOLVER_ABI = [
     "function setAddr(bytes32 node, address a)"
@@ -40,50 +41,54 @@ async function registerDomain(label) {
         const ownerAddress = await wallet.getAddress();
         const duration = 31536000;
 
-        // LANGKAH 1, 2, 3, 4 sudah terbukti berhasil...
-        console.log("[1/5] Mengecek ketersediaan... ✅");
-        const isAvailable = await contract.available(label);
-        if (!isAvailable) throw new Error(`Domain '${label}' tidak tersedia.`);
-        
-        console.log("[2/5] Membuat komitmen... ✅");
+        // LANGKAH 1 & 2: Ketersediaan & Komitmen (tetap sama)
+        console.log("[1 & 2] Cek Ketersediaan & Membuat Komitmen...");
+        if (!(await contract.available(label))) throw new Error(`Domain '${label}' tidak tersedia.`);
         const secret = ethers.randomBytes(32);
         const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, ownerAddress, secret]);
+        console.log("✅ Komitmen OK.");
 
-        console.log("[3/5] Mengirim transaksi 'commit'... ✅");
+        // LANGKAH 3: Commit (tetap sama)
+        console.log("[3/5] Mengirim transaksi 'commit'...");
         const commitTx = await contract.commit(commitment);
         await commitTx.wait();
         console.log(`✅ Commit berhasil: ${commitTx.hash}`);
 
+        // LANGKAH 4: Menunggu (tetap sama)
         const waitTime = Number(await contract.minCommitmentAge()) + 15;
         console.log(`[4/5] Menunggu selama ${waitTime} detik...`);
         await sleep(waitTime * 1000);
 
-        // LANGKAH 5: Registrasi Final
-        console.log("[5/5] Mempersiapkan registrasi final...");
+        // LANGKAH 5: Registrasi Final melalui MULTICALL
+        console.log("[5/5] Mempersiapkan registrasi final via MULTICALL...");
         const price = await contract.rentPrice(label, duration);
         const resolverAddress = await contract.resolver();
+        const node = ethers.namehash(fullNormalizedName);
+        const resolverInterface = new ethers.Interface(RESOLVER_ABI);
+        const dataForResolver = [resolverInterface.encodeFunctionData("setAddr", [node, ownerAddress])];
         
-        // =================================================================
-        // PERUBAHAN KUNCI: Kirim data payload kosong
-        const dataPayload = [];
-        console.log("   - MENGIRIM DATA PAYLOAD KOSONG UNTUK TES.");
-        // =================================================================
-        
-        console.log("   - Mengirim transaksi 'register'...");
-        const registerTx = await contract.register(
+        // 5a. Encode data untuk panggilan 'Register'
+        const registrarInterface = new ethers.Interface(REGISTRAR_ABI);
+        const registerCallData = registrarInterface.encodeFunctionData("Register", [
             label, ownerAddress, duration, secret, resolverAddress,
-            dataPayload, false, 0, { value: price }
-        );
-        await registerTx.wait();
+            dataForResolver, false, 0
+        ]);
+        console.log("   - Data untuk 'Register' berhasil di-encode.");
+
+        // 5b. Kirim transaksi multicall yang membungkus data 'Register'
+        console.log("   - Mengirim transaksi 'multicall'...");
+        const multicallTx = await contract.multicall([registerCallData], { value: price });
+        await multicallTx.wait();
         
         console.log("\n🎉🎉🎉 PENDAFTARAN SUKSES! 🎉🎉🎉");
-        console.log(`Domain '${fullNormalizedName}' telah terdaftar (tanpa pengaturan alamat).`);
-        console.log(`Tx Hash: ${registerTx.hash}`);
+        console.log(`Domain '${fullNormalizedName}' telah terdaftar melalui multicall.`);
+        console.log(`Tx Hash: ${multicallTx.hash}`);
 
     } catch (error) {
         console.error("\n🔥🔥🔥 GAGAL 🔥🔥🔥");
         console.error(error.reason || error.message);
     }
 }
+
 // Ganti label di bawah ini dan jalankan
-registerDomain("patnerfinasl");
+registerDomain("patnerjuafinal");
