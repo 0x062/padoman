@@ -1,8 +1,6 @@
+//#!/usr/bin/env node
 
-
-// bot.js - Skrip Refactored & Wrapped dalam IIFE
-// Pastikan menjalankannya dengan: node bot.js
-
+// bot.js - Refactored untuk Ethers v6 dan BigInt
 require('dotenv').config();
 const { ethers } = require('ethers');
 
@@ -11,25 +9,22 @@ const PRIVATE_KEY     = process.env.PRIVATE_KEY;
 const REGISTRAR_ADDR  = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 const PUBLIC_RESOLVER = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
 
-// ABI Registrar
+// ABI
 const REGISTRAR_ABI = [
   "function available(string name) view returns(bool)",
   "function commitments(bytes32 commitment) view returns(uint256)",
   "function minCommitmentAge() view returns(uint256)",
   "function rentPrice(string name,uint256 duration) view returns(uint256)",
   "function commit(bytes32 commitment)",
-  "function resolver() view returns(address)",
   "function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses) payable"
 ];
 
-// ABI Resolver
 const RESOLVER_ABI = [
   "function setAddr(bytes32 node,address a)"
 ];
 
-// Validasi env
 if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
-  console.error("⚠️ PHAROS_RPC_URL dan PRIVATE_KEY harus diset di .env");
+  console.error("⚠️  PHAROS_RPC_URL dan PRIVATE_KEY harus diisi di .env");
   process.exit(1);
 }
 
@@ -37,10 +32,8 @@ const provider  = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
 const wallet    = new ethers.Wallet(PRIVATE_KEY, provider);
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
-// Delay helper
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// Debug callStatic register to get revert reason
 async function debugRegister(label, owner, duration, secret, price) {
   const fullName = `${label}.phrs`;
   const node     = ethers.namehash(fullName);
@@ -65,43 +58,37 @@ async function debugRegister(label, owner, duration, secret, price) {
   }
 }
 
-// Main function: register domain
 async function registerDomain(label) {
   console.log(`🚀 Registrasi '${label}.phrs' dimulai`);
   const owner    = await wallet.getAddress();
-  const duration = 31536000; // 1 tahun
+  const duration = 31536000;
 
-  // 1. Check availability
   const available = await registrar.available(label);
-  if (!available) {
-    throw new Error(`Domain '${label}.phrs' tidak tersedia`);
-  }
+  if (!available) throw new Error(`Domain '${label}.phrs' tidak tersedia`);
   console.log(`✅ Domain tersedia`);
 
-  // 2. Commit
   const secret     = ethers.randomBytes(32);
   const commitment = ethers.solidityPackedKeccak256(
     ['string','address','bytes32'],
     [label, owner, secret]
   );
+
   const txCommit = await registrar.commit(commitment);
   await txCommit.wait();
   console.log(`✅ Commit TX: ${txCommit.hash}`);
 
-  // 3. Debug timing and wait
   const commitTimeBN = await registrar.commitments(commitment);
   const block1       = await provider.getBlock('latest');
   const minAgeBN     = await registrar.minCommitmentAge();
-  // Convert BigNumber to Number for calculation
-  const commitTime   = commitTimeBN.toNumber();
-  const minAge       = minAgeBN.toNumber();
+
+  const commitTime   = Number(commitTimeBN);
+  const minAge       = Number(minAgeBN);
   const currentTime  = block1.timestamp;
 
   let waitTime = Math.max(0, minAge - (currentTime - commitTime)) + 60;
   console.log(`⏱ Menunggu ${waitTime}s sebelum registrasi`);
   await sleep(waitTime * 1000);
 
-  // 4. Final register
   const price      = await registrar.rentPrice(label, duration);
   await debugRegister(label, owner, duration, secret, price);
 
@@ -124,7 +111,6 @@ async function registerDomain(label) {
   console.log(`🎉 Domain berhasil terdaftar, TX: ${txRegister.hash}`);
 }
 
-// IIFE entry point
 (async () => {
   try {
     await registerDomain('patnerfinal');
