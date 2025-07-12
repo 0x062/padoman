@@ -131,6 +131,6 @@ async function registerDomain(label) {
 }
 
 // Jalankan dan tangani error
-egisterDomain("patnerfinal").catch(err => {
+registerDomain("patnerfinal").catch(err => {
   console.error("🔥 Fatal Error:", err.message || err);
 });
