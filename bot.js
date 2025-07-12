@@ -40,52 +40,73 @@ const contract = new ethers.Contract(REGISTRAR_CONTRACT_ADDRESS, REGISTRAR_ABI, 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function registerDomain(fullDomainName) {
-    // ... (bagian awal fungsi tetap sama) ...
     const label = fullDomainName.split('.')[0];
+    if (!label) {
+        console.error(`❌ Nama domain tidak valid: '${fullDomainName}'`);
+        return;
+    }
+
     const normalizedLabel = ethers.ensNormalize(label);
     console.log(`✅ Memproses domain '${fullDomainName}' dengan label yang dinormalisasi: '${normalizedLabel}'`);
     console.log(`🚀 Memulai proses registrasi untuk: ${normalizedLabel}`);
 
     try {
-        // ... (LANGKAH 1 s/d 4 TETAP SAMA, tidak perlu diubah) ...
-        console.log(`[1/5] 🔍 Mengecek ketersediaan... ✅`);
-        console.log(`[2/5] 📝 Menghitung hash komitmen... ✅`);
-        console.log(`[3/5] ✉️ Mengirim transaksi 'commit'... ✅`);
-        console.log(`[4/5] ⏳ Menunggu... ✅`);
+        // =================================================================
+        // PERBAIKAN: Deklarasikan ownerAddress di sini agar bisa diakses semua langkah
+        const ownerAddress = await wallet.getAddress();
+        // =================================================================
 
+        // --- LANGKAH 1: Cek Ketersediaan ---
+        console.log(`[1/5] 🔍 Mengecek ketersediaan label '${normalizedLabel}'...`);
+        const isAvailable = await contract.available(normalizedLabel);
+        if (!isAvailable) {
+            console.log(`❌ Label '${normalizedLabel}' sudah terdaftar.`);
+            return;
+        }
+        console.log(`✅ Label tersedia!`);
+
+        // --- LANGKAH 2: Membuat Komitmen (Secara Lokal) ---
+        const secret = ethers.randomBytes(32);
+        
+        console.log(`[2/5] 📝 Menghitung hash komitmen (secara lokal)...`);
+        const commitment = ethers.solidityPackedKeccak256(
+            ['string', 'address', 'bytes32'],
+            [normalizedLabel, ownerAddress, secret]
+        );
+        console.log(`   - Commitment Hash: ${commitment}`);
+
+        // --- LANGKAH 3: Mengirim Transaksi 'commit' ---
+        console.log(`[3/5] ✉️ Mengirim transaksi 'commit' ke blockchain...`);
+        const commitTx = await contract.commit(commitment);
+        await commitTx.wait();
+        console.log(`   - Transaksi Commit berhasil! Hash: ${commitTx.hash}`);
+
+        // --- LANGKAH 4: Menunggu ---
+        const waitTime = Number(await contract.minCommitmentAge()) + 10;
+        console.log(`[4/5] ⏳ Menunggu selama ${waitTime} detik...`);
+        await sleep(waitTime * 1000);
 
         // --- LANGKAH 5: Mendaftarkan Label ---
         console.log(`[5/5] ✅ Mempersiapkan registrasi final...`);
-        const duration = 31536000; // 1 tahun
+        const duration = 31536000;
 
-        // =================================================================
-        // FINAL FIX: TANGANI STRUKTUR HARGA DENGAN BENAR
-        // =================================================================
         console.log(`   - Menanyakan harga sewa ke smart contract...`);
         const priceData = await contract.rentPrice(normalizedLabel, duration);
-        
-        // Log ini sangat penting untuk melihat apa yang sebenarnya dikembalikan kontrak
         console.log("   - Struktur data harga mentah:", priceData);
 
         let finalPrice;
-
-        // Cek apakah priceData adalah objek dengan property 'base' (standar ENS)
         if (typeof priceData === 'object' && priceData.base) {
             console.log('   - Harga terdeteksi sebagai STRUKTUR (base + premium). Menjumlahkan...');
-            // Harga total adalah base + premium. Keduanya adalah BigInt.
             finalPrice = priceData.base + priceData.premium;
         } else {
-            // Jika bukan, asumsikan itu adalah satu nilai BigInt
             console.log('   - Harga terdeteksi sebagai NILAI TUNGGAL.');
             finalPrice = priceData;
         }
-
         console.log(`   - HARGA FINAL YANG AKAN DIKIRIM: ${ethers.formatUnits(finalPrice, "ether")} PHRS`);
-        // =================================================================
         
         console.log(`   - Mengirim transaksi 'register' dengan harga yang tepat...`);
         const registerTx = await contract.register(normalizedLabel, ownerAddress, duration, secret, {
-            value: finalPrice // Gunakan harga final yang sudah dihitung
+            value: finalPrice
         });
         await registerTx.wait();
         
@@ -95,7 +116,6 @@ async function registerDomain(fullDomainName) {
         console.log(`   - Transaksi Register Hash: ${registerTx.hash}`);
 
     } catch (error) {
-        // ... (bagian catch error tetap sama) ...
         console.error("\n🔥 Terjadi kesalahan:", error);
     }
 }
