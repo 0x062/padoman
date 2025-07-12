@@ -131,4 +131,4 @@ async function registerDomain(fullDomainName) {
 }
 
 // Ganti nama domain di bawah ini dengan yang kamu inginkan
-registerDomain("ini-tes-teraukhir.phrs");
+registerDomain("patner12k.phrs");
