@@ -10,7 +10,7 @@ const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 
 // ABI minimal, hanya untuk satu fungsi
 const REGISTRAR_ABI = [
-    "function Available(string memory name) view returns(bool)"
+    "function available(string memory name) view returns(bool)"
 ];
 
 // Koneksi
