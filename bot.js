@@ -20,8 +20,7 @@ const REGISTRAR_ABI = [
 ];
 const RESOLVER_ABI = ["function setAddr(bytes32 node, address a)"];
 
-// 3. Setup provider & kontrak
-if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
+// 3. Setup provider & kontrak\if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
   throw new Error("Harap isi PHAROS_RPC_URL dan PRIVATE_KEY di .env");
 }
 const provider  = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
@@ -31,7 +30,8 @@ const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 // Helper
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-// Debug helper: callStatic untuk register\async function debugRegister(label, owner, duration, secret, price) {
+// Debug helper: callStatic untuk register
+async function debugRegister(label, owner, duration, secret, price) {
   const fullName = `${label}.phrs`;
   const node     = ethers.namehash(fullName);
   const iface    = new ethers.Interface(RESOLVER_ABI);
@@ -125,4 +125,6 @@ async function registerDomain(label) {
 }
 
 // Eksekusi dan tangani error
-egisterDomain("patnerfinal").catch(err => console.error(err));
+registerDomain("patnerfinal").catch(err => {
+  console.error("🔥 Fatal Error:", err.message || err);
+});
