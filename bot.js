@@ -19,7 +19,7 @@ const REGISTRAR_ABI = [
     "function available(string memory name) view returns(bool)",
     "function minCommitmentAge() view returns (uint256)",
     "function commit(bytes32 commitment) external",
-    "function register(string memory name, address owner, uint duration, bytes32 secret) external payable",
+    "function Register(string memory name, address owner, uint duration, bytes32 secret) external payable",
     // Tambahkan fungsi untuk query harga (nama fungsi ini adalah tebakan)
     "function rentPrice(string memory name, uint256 duration) view returns(uint256)"
 ];
@@ -120,4 +120,4 @@ async function registerDomain(fullDomainName) {
     }
 }
 
-registerDomain("domainimpiankhu.phrs");
+registerDomain("seleraratyudp.phrs");
