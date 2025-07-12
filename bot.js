@@ -131,4 +131,4 @@ async function registerDomain(fullDomainName) {
 }
 
 // Ganti nama domain di bawah ini dengan yang kamu inginkan
-registerDomain("patner12k.phrs");
+registerDomain("patnerBot.phrs");
