@@ -87,7 +87,7 @@ async function registerDomain(label) {
 
 (async () => {
   try {
-    await registerDomain("patnerberhasil");
+    await registerDomain("pahdjkspe");
   } catch (err) {
     console.error("\n🔥🔥🔥 GAGAL 🔥🔥🔥");
     console.error("   - Pesan:", err.reason || err.message);
