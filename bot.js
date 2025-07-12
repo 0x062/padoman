@@ -12,14 +12,7 @@ const PUBLIC_RESOLVER = "0x9a43dca1c3bb268546b98eb2ab1401bfc5b58505";
 // 2. ABI
 const REGISTRAR_ABI = [
   "function available(string name) view returns (bool)",
-  "function minCommitmentAge() view returns (uint256)",
-  "function rentPrice(string name, uint256 duration) view returns (uint256)",
-  "function commitments(bytes32 commitment) view returns (uint256)",  // added to debug timing
-  "function commit(bytes32 commitment)",
-  "function resolver() view returns (address)",
-  "function register(string name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] data, bool reverseRecord, uint16 ownerControlledFuses) payable"
-];
-  "function available(string name) view returns (bool)",
+  "function commitments(bytes32 commitment) view returns (uint256)",
   "function minCommitmentAge() view returns (uint256)",
   "function rentPrice(string name, uint256 duration) view returns (uint256)",
   "function commit(bytes32 commitment)",
@@ -34,21 +27,19 @@ const RESOLVER_ABI = [
 if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
   throw new Error("Harap isi PHAROS_RPC_URL dan PRIVATE_KEY di .env");
 }
-
 const provider  = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
 const wallet    = new ethers.Wallet(PRIVATE_KEY, provider);
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
 // Helper: delay
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms)); => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// Debug: callStatic untuk register
+// Debug helper: callStatic untuk register
 async function debugRegister(label, owner, duration, secret, price) {
   const fullName = `${label}.phrs`;
   const node     = ethers.namehash(fullName);
   const iface    = new ethers.Interface(RESOLVER_ABI);
   const data     = [iface.encodeFunctionData("setAddr", [node, owner])];
-
   try {
     await registrar.callStatic.register(
       label,
@@ -70,8 +61,6 @@ async function debugRegister(label, owner, duration, secret, price) {
 // Main: registrasi domain
 async function registerDomain(label) {
   console.log(`🚀 Mulai registrasi '${label}.phrs'`);
-
-  // Persiapan
   const owner    = await wallet.getAddress();
   const duration = 31536000; // 1 tahun
   const fullName = `${label}.phrs`;
@@ -86,10 +75,8 @@ async function registerDomain(label) {
   // 1. Cek availability
   console.log("[1/5] Mengecek ketersediaan...");
   const available = await registrar.available(label);
-  if (!available) {
-    throw new Error(`Domain '${fullName}' tidak tersedia`);
-  }
-  console.log("✅ Tersedia");
+  if (!available) throw new Error(`Domain '${fullName}' tidak tersedia`);
+  console.log("✅ Domain tersedia");
 
   // 2. Buat komitmen
   console.log("[2/5] Buat komitmen...");
@@ -98,43 +85,34 @@ async function registerDomain(label) {
     ['string', 'address', 'bytes32'],
     [label, owner, secret]
   );
-  console.log("✅ Komitmen siap");
+  console.log("✅ Komitmen dibuat");
 
-  // 3. Submit commit
+  // 3. Submit commit dan debug timing
   console.log("[3/5] Mengirim commit tx...");
   const txCommit = await registrar.commit(commitment);
   await txCommit.wait();
   console.log(`✅ Commit TX: ${txCommit.hash}`);
 
-  // Debug: periksa waktu commit dan minCommitmentAge
+  // Ambil timestamp commit dan block untuk cek timing
   const commitTime = await registrar.commitments(commitment);
-  const block = await provider.getBlock("latest");
-  const minAge = await registrar.minCommitmentAge();
-  console.log(`🕒 commitTime: ${commitTime} (timestamp)`);
-  console.log(`🕒 current blockTime: ${block.timestamp}`);
+  const block      = await provider.getBlock("latest");
+  const minAge     = await registrar.minCommitmentAge();
+  console.log(`🕒 commitTime: ${commitTime}`);
+  console.log(`🕒 block.timestamp: ${block.timestamp}`);
   console.log(`🔍 minCommitmentAge: ${minAge} detik`);
 
-  // 4. Tunggu waktu minimum
-  const elapsed = block.timestamp - commitTime;
-  const waitTime = (minAge - elapsed > 0 ? minAge - elapsed : 0) + 15;
+  // Hitung waktu tunggu sisa
+  let waitTime = minAge - (block.timestamp - commitTime);
+  if (waitTime < 0) waitTime = 0;
+  waitTime += 15;
   console.log(`[4/5] Menunggu ${waitTime}s...`);
   await sleep(waitTime * 1000);
 
-  // Lanjut ke registration ${txCommit.hash}`);
-
-  // 4. Tunggu waktu minimum
-  const waitTime = Number(await registrar.minCommitmentAge()) + 15;
-  console.log(`[4/5] Menunggu ${waitTime}s...`);
-  await sleep(waitTime * 1000);
-
-  // 5. Debug & Register
-  console.log("[5/5] Siapkan registrasi final...");
+  // 4. Debug & register final
+  console.log("[5/5] Mempersiapkan registrasi final...");
   const price = await registrar.rentPrice(label, duration);
-
-  // Debug callStatic
   await debugRegister(label, owner, duration, secret, price);
 
-  // Kirim register tx
   console.log("   - Mengirim register tx...");
   const iface = new ethers.Interface(RESOLVER_ABI);
   const data  = [iface.encodeFunctionData("setAddr", [ethers.namehash(fullName), owner])];
@@ -150,11 +128,8 @@ async function registerDomain(label) {
     { value: price }
   );
   await txReg.wait();
-
   console.log(`🎉 Domain '${fullName}' berhasil terdaftar! TX: ${txReg.hash}`);
 }
 
 // Jalankan dan tangani error
-registerDomain("patnerfinal").catch(err => {
-  console.error("🔥 Fatal Error:", err.message || err);
-});
+registerDomain("patnerfinal").catch(err => console.error("🔥 Fatal Error:", err.message || err));
