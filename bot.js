@@ -10,25 +10,28 @@ const { ethers } = require('ethers');
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
-// Ganti dengan alamat smart contract registrar di Pharos Testnet
+// Alamat smart contract registrar di Pharos Testnet
 const REGISTRAR_CONTRACT_ADDRESS = "0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175";
 
-// ABI (Application Binary Interface) Final
-// Tambahkan 'rentPrice' ke dalam ABI
+// ABI (Application Binary Interface) untuk Kontrak Registrar
 const REGISTRAR_ABI = [
     "function available(string memory name) view returns(bool)",
     "function minCommitmentAge() view returns (uint256)",
     "function rentPrice(string memory name, uint256 duration) view returns(uint256)",
     "function Commit(bytes32 commitment) external",
     "function resolver() view returns (address)",
-    // PERUBAHAN DI SINI: ganti "register" menjadi "Register"
     "function Register(string calldata name, address owner, uint256 duration, bytes32 secret, address resolver, bytes[] calldata data, bool reverseRecord, uint16 ownerControlledFuses) external payable"
+];
+
+// ABI minimal untuk Kontrak Resolver (untuk encode data)
+const RESOLVER_ABI = [
+    "function setAddr(bytes32 node, address a)"
 ];
 // =================================================================
 
 // Validasi konfigurasi awal
-if (!PHAROS_RPC_URL || !PRIVATE_KEY || REGISTRAR_CONTRACT_ADDRESS === "0x...") {
-    console.error("❌ Harap isi PHAROS_RPC_URL, PRIVATE_KEY di file .env dan perbarui REGISTRAR_CONTRACT_ADDRESS di dalam skrip.");
+if (!PHAROS_RPC_URL || !PRIVATE_KEY) {
+    console.error("❌ Harap isi PHAROS_RPC_URL dan PRIVATE_KEY di file .env.");
     process.exit(1);
 }
 
@@ -42,10 +45,10 @@ const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Fungsi utama untuk mendaftarkan domain secara lengkap
- * @param {string} fullDomainName - Nama domain lengkap yang ingin didaftarkan (contoh: "domainkeren.phrs")
+ * @param {string} fullDomainName - Nama domain lengkap (contoh: "keren.phrs")
  */
 async function registerDomain(fullDomainName) {
-    const tld = "phrs"; // Definisikan TLD di sini
+    const tld = "phrs";
     const label = fullDomainName.split('.')[0];
     if (!label) {
         console.error(`❌ Nama domain tidak valid: '${fullDomainName}'`);
@@ -72,13 +75,13 @@ async function registerDomain(fullDomainName) {
         console.log(`✅ Ketersediaan & Komitmen OK.`);
 
         // LANGKAH 3: Commit
-        console.log("[3] Mengirim transaksi 'commit'...");
+        console.log("[3] Mengirim transaksi 'Commit'...");
         const commitTx = await contract.Commit(commitment);
         await commitTx.wait();
         console.log(`✅ Commit berhasil! Hash: ${commitTx.hash}`);
 
         // LANGKAH 4: Menunggu
-        const waitTime = Number(await contract.minCommitmentAge()) + 15; // Tambah buffer jadi 15 detik
+        const waitTime = Number(await contract.minCommitmentAge()) + 15;
         console.log(`[4] Menunggu selama ${waitTime} detik...`);
         await sleep(waitTime * 1000);
 
@@ -90,11 +93,11 @@ async function registerDomain(fullDomainName) {
         const registrationPrice = await contract.rentPrice(normalizedLabel, duration);
         console.log(`   - Harga sewa didapat: ${ethers.formatEther(registrationPrice)} PHRS`);
 
-        // 5b. Dapatkan alamat resolver default dari kontrak registrar
+        // 5b. Dapatkan alamat resolver default
         const resolverAddress = await contract.resolver();
         console.log(`   - Alamat resolver didapat: ${resolverAddress}`);
 
-        // 5c. Siapkan "data payload" untuk menginstruksikan resolver
+        // 5c. Siapkan "data payload" untuk resolver
         const node = ethers.namehash(fullNormalizedName);
         const resolverInterface = new ethers.Interface(RESOLVER_ABI);
         const dataPayload = [
@@ -109,10 +112,10 @@ async function registerDomain(fullDomainName) {
             ownerAddress,
             duration,
             secret,
-            resolverAddress,      // Argumen ke-5: Alamat resolver
-            dataPayload,          // Argumen ke-6: Instruksi untuk resolver
-            false,                // Argumen ke-7: reverseRecord (biasanya false)
-            0,                    // Argumen ke-8: ownerControlledFuses (0 untuk default)
+            resolverAddress,
+            dataPayload,
+            false,
+            0,
             { value: registrationPrice }
         );
         await registerTx.wait();
@@ -129,4 +132,5 @@ async function registerDomain(fullDomainName) {
     }
 }
 
-registerDomain("seleraratddyudp.phrs");
+// Ganti nama domain di bawah ini dengan yang kamu inginkan
+registerDomain("final-testt-doomain.phrs");
