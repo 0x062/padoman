@@ -100,7 +100,7 @@ async function registerDomain(label) {
 }
 
 // Jalankan
-const label = 'patnerterakhir'
+const label = 'patakhir'
 registerDomain(label).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan: ${err.reason || err.message}`)
