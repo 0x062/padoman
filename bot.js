@@ -39,55 +39,71 @@ const contract = new ethers.Contract(REGISTRAR_CONTRACT_ADDRESS, REGISTRAR_ABI, 
 // Fungsi untuk membuat jeda/delay
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Fungsi Utama Bot
+// register.js
+
 async function registerDomain(domainName) {
-    console.log(`🚀 Memulai proses registrasi untuk: ${domainName}`);
+    // --- PERBAIKAN DIMULAI DI SINI ---
+    let normalizedName;
+    try {
+        // Lakukan normalisasi nama domain sesuai standar ENS
+        normalizedName = ethers.ensNormalize(domainName);
+    } catch (e) {
+        console.error(`❌ Nama domain '${domainName}' tidak valid:`, e.message);
+        return;
+    }
+    console.log(`✅ Nama dinormalisasi menjadi: '${normalizedName}'`);
+    // --- PERBAIKAN SELESAI ---
+
+    console.log(`🚀 Memulai proses registrasi untuk: ${normalizedName}`);
 
     try {
         // --- LANGKAH 1: Cek Ketersediaan ---
-        console.log(`[1/5] 🔍 Mengecek ketersediaan '${domainName}'...`);
-        const isAvailable = await contract.available(domainName);
+        // Gunakan nama yang sudah dinormalisasi
+        console.log(`[1/5] 🔍 Mengecek ketersediaan '${normalizedName}'...`);
+        const isAvailable = await contract.available(normalizedName);
         if (!isAvailable) {
-            console.log(`❌ Domain '${domainName}' sudah terdaftar.`);
+            console.log(`❌ Domain '${normalizedName}' sudah terdaftar.`);
             return;
         }
         console.log(`✅ Domain tersedia!`);
 
         // --- LANGKAH 2: Membuat Komitmen (Commitment) ---
         const ownerAddress = await wallet.getAddress();
-        const secret = ethers.randomBytes(32); // Buat 'secret' acak untuk keamanan
+        const secret = ethers.randomBytes(32);
         
         console.log(`[2/5] 📝 Membuat komitmen untuk owner ${ownerAddress}...`);
-        const commitment = await contract.makeCommitment(domainName, ownerAddress, secret);
+        // Gunakan nama yang sudah dinormalisasi
+        const commitment = await contract.makeCommitment(normalizedName, ownerAddress, secret);
         console.log(`   - Commitment Hash: ${commitment}`);
 
         // --- LANGKAH 3: Mengirim Transaksi 'commit' ---
         console.log(`[3/5] ✉️ Mengirim transaksi 'commit' ke blockchain...`);
         const commitTx = await contract.commit(commitment);
-        await commitTx.wait(); // Tunggu sampai transaksi dikonfirmasi
+        await commitTx.wait(); 
         console.log(`   - Transaksi Commit berhasil! Hash: ${commitTx.hash}`);
 
         // --- LANGKAH 4: Menunggu ---
-        const waitTime = Number(await contract.minCommitmentAge()) + 10; // Ambil waktu tunggu dari contract + buffer 10 detik
+        const waitTime = Number(await contract.minCommitmentAge()) + 10;
         console.log(`[4/5] ⏳ Menunggu selama ${waitTime} detik sesuai aturan smart contract...`);
         await sleep(waitTime * 1000);
 
         // --- LANGKAH 5: Mengirim Transaksi 'register' ---
         console.log(`[5/5] ✅ Mendaftarkan domain secara final...`);
-        const duration = 31536000; // 1 tahun dalam detik
-        const registrationPrice = ethers.parseEther("0.001"); // Ganti dengan harga registrasi di Pharos (jika ada)
+        const duration = 31536000;
+        const registrationPrice = ethers.parseEther("0.001");
 
-        const registerTx = await contract.register(domainName, ownerAddress, duration, secret, {
+        // Gunakan nama yang sudah dinormalisasi
+        const registerTx = await contract.register(normalizedName, ownerAddress, duration, secret, {
             value: registrationPrice 
         });
         await registerTx.wait();
-        console.log(`\n🎉 SELAMAT! Domain '${domainName}' berhasil didaftarkan untukmu!`);
+        console.log(`\n🎉 SELAMAT! Domain '${normalizedName}' berhasil didaftarkan untukmu!`);
         console.log(`   - Transaksi Register Hash: ${registerTx.hash}`);
 
     } catch (error) {
-        console.error("\n🔥 Terjadi kesalahan:", error.message);
+        console.error("\n🔥 Terjadi kesalahan:", error);
     }
 }
 
 // Jalankan bot! Ganti 'domainkerenku' dengan nama yang kamu inginkan.
-registerDomain("domainkerenku");
+registerDomain("domainkerenkuk.phrs");
