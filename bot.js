@@ -21,12 +21,12 @@ const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
 const sleep = ms => new Promise(res => setTimeout(res, ms));
 
-// Gunakan secret yang disimpan agar sama saat commit dan register
-const secret = ethers.randomBytes(32);
+// Global secret
+const globalSecret = ethers.randomBytes(32);
 
 async function registerDomain(label) {
   const owner = await wallet.getAddress();
-  const duration = 31536000; // 1 tahun
+  const duration = 31536000;
   const fullName = `${label}.phrs`;
   const node = ethers.namehash(fullName);
 
@@ -36,25 +36,22 @@ async function registerDomain(label) {
   if (!available) throw new Error("Domain tidak tersedia!");
   console.log(`✅ Domain tersedia`);
 
-  const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, owner, secret]);
+  const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, owner, globalSecret]);
 
   const commitTx = await registrar.commit(commitment);
   await commitTx.wait();
   console.log(`✅ Commit tx: ${commitTx.hash}`);
 
   const commitTime = Number(await registrar.commitments(commitment));
-  const currentBlock = await provider.getBlock('latest');
-  const now = currentBlock.timestamp;
-  const minWait = Number(await registrar.minCommitmentAge());
+  const now = (await provider.getBlock('latest')).timestamp;
+  const waitTime = Number(await registrar.minCommitmentAge());
+  const delay = Math.max(0, waitTime - (now - commitTime)) + 15;
 
-  const delay = Math.max(0, minWait - (now - commitTime)) + 15;
   console.log(`⏱ Menunggu ${delay} detik...`);
   await sleep(delay * 1000);
 
   const price = await registrar.rentPrice(label, duration);
-
-  // Biarkan data kosong seperti pada tx sukses sebelumnya
-  const data = [];
+  const data = []; // kosong sesuai transaksi sukses
 
   try {
     console.log("🔍 Melakukan pre-check dengan callStatic...");
@@ -62,7 +59,7 @@ async function registerDomain(label) {
       label,
       owner,
       duration,
-      secret,
+      globalSecret,
       PUBLIC_RESOLVER,
       data,
       false,
@@ -75,7 +72,7 @@ async function registerDomain(label) {
       label,
       owner,
       duration,
-      secret,
+      globalSecret,
       PUBLIC_RESOLVER,
       data,
       false,
@@ -86,8 +83,8 @@ async function registerDomain(label) {
     await registerTx.wait();
     console.log(`🎉 Domain berhasil terdaftar, TX: ${registerTx.hash}`);
   } catch (err) {
-    console.error("\n⛔️ Debug Revert:", err.reason);
-    console.error("🔥 ERROR:", err.message);
+    console.error("\n⛔️ Debug Revert:", err?.reason || err?.errorName || "Unknown");
+    console.error("🔥 ERROR:", err?.message || err);
   }
 }
 
@@ -95,6 +92,6 @@ async function registerDomain(label) {
   try {
     await registerDomain("domainbarkuu");
   } catch (err) {
-    console.error("🔥 ERROR:", err.message);
+    console.error("🔥 ERROR:", err?.message || err);
   }
 })();
