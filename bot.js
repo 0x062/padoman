@@ -1,4 +1,4 @@
-// bot.js - Skrip Final Definitif Berdasarkan Bukti Transaksi
+// bot.js - Skrip Definitif Berdasarkan Bukti Transaksi
 
 // 1. Impor library
 require('dotenv').config();
@@ -88,7 +88,12 @@ async function registerDomain(label) {
 
     } catch (error) {
         console.error("\n🔥🔥🔥 GAGAL 🔥🔥🔥");
-        console.error(error.reason || error.message);
+        // Mencetak pesan error yang lebih berguna dari 'revert'
+        if (error.revert) {
+            console.error("   - Alasan dari Kontrak:", error.revert.args.join(', '));
+        } else {
+            console.error("   - Pesan:", error.reason || error.message);
+        }
     }
 }
 
