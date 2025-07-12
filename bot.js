@@ -1,4 +1,4 @@
-// bot.js - Skrip Final Berdasarkan Bukti Decode
+// bot.js - Versi Deteksi & Debug Register
 
 require('dotenv').config();
 const { ethers } = require('ethers');
@@ -17,9 +17,8 @@ const REGISTRAR_ABI = [
   "function register(string,address,uint256,bytes32,address,bytes[],bool,uint16) payable"
 ];
 
-// ABI minimal untuk resolver, hanya untuk meng-encode data
 const RESOLVER_ABI = [
-    "function setAddr(bytes32 node, address a)"
+  "function setAddr(bytes32 node, address a)"
 ];
 
 const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
@@ -27,13 +26,14 @@ const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet);
 
 const sleep = ms => new Promise(res => setTimeout(res, ms));
-const secret = ethers.randomBytes(32); // Definisikan secret sekali agar konsisten
+const fixedSecret = "0x5de29eca00000003935763085462311afa8e25ef75762ae00ef4a9066fe0140c"; // Secret dari tx sukses
 
 async function registerDomain(label) {
   const owner = await wallet.getAddress();
-  const duration = 31536000; // 1 tahun
+  const duration = 31536000;
   const fullName = `${label}.phrs`;
   const node = ethers.namehash(fullName);
+  const secret = fixedSecret;
 
   console.log(`\n🚀 Memulai registrasi '${fullName}'...`);
 
@@ -42,7 +42,6 @@ async function registerDomain(label) {
   console.log(`✅ Domain tersedia`);
 
   const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, owner, secret]);
-
   const commitTx = await registrar.commit(commitment);
   await commitTx.wait();
   console.log(`✅ Commit tx: ${commitTx.hash}`);
@@ -58,38 +57,60 @@ async function registerDomain(label) {
 
   const price = await registrar.rentPrice(label, duration);
 
-  // =================================================================
-  // PERBAIKAN FINAL: Kita kembalikan pembuatan data payload
   const resolverInterface = new ethers.Interface(RESOLVER_ABI);
   const data = [
-      resolverInterface.encodeFunctionData("setAddr", [node, owner])
+    resolverInterface.encodeFunctionData("setAddr", [node, owner])
   ];
-  console.log("✅ Data payload untuk resolver berhasil dibuat.");
-  // =================================================================
+  console.log("✅ Data payload siap:", data);
 
-  console.log("🚀 Mengirim transaksi 'register' final...");
-  const registerTx = await registrar.register(
-    label,
-    owner,
-    duration,
-    secret,
-    PUBLIC_RESOLVER,
-    data, // Menggunakan data payload yang sudah dibuat
-    false,
-    0,
-    { value: price }
-  );
+  try {
+    console.log("🔍 Pre-check callStatic.register...");
+    await registrar.callStatic["register"](
+      label,
+      owner,
+      duration,
+      secret,
+      PUBLIC_RESOLVER,
+      data,
+      false,
+      0,
+      { value: price }
+    );
 
-  await registerTx.wait();
-  console.log(`\n🎉🎉🎉 DOMAIN BERHASIL TERDAFTAR! 🎉🎉🎉`);
-  console.log(`   - TX HASH: ${registerTx.hash}`);
+    console.log("🚀 Mengirim transaksi 'register'...");
+    const registerTx = await registrar.register(
+      label,
+      owner,
+      duration,
+      secret,
+      PUBLIC_RESOLVER,
+      data,
+      false,
+      0,
+      { value: price }
+    );
+    await registerTx.wait();
+
+    console.log(`\n🎉🎉🎉 DOMAIN BERHASIL TERDAFTAR! 🎉🎉🎉`);
+    console.log(`   - TX HASH: ${registerTx.hash}`);
+  } catch (err) {
+    console.error("\n🔥🔥🔥 GAGAL 🔥🔥🔥");
+    console.error("   - label:", label);
+    console.error("   - owner:", owner);
+    console.error("   - duration:", duration);
+    console.error("   - secret:", secret);
+    console.error("   - resolver:", PUBLIC_RESOLVER);
+    console.error("   - data:", data);
+    console.error("   - value:", price.toString());
+    console.error("   - Pesan:", err?.reason || err?.errorName || err?.message || "Unknown error");
+  }
 }
 
 (async () => {
   try {
-    await registerDomain("pahdjkspe");
+    await registerDomain("gunakanituku"); // Ganti domain di sini
   } catch (err) {
-    console.error("\n🔥🔥🔥 GAGAL 🔥🔥🔥");
-    console.error("   - Pesan:", err.reason || err.message);
+    console.error("\n🔥🔥🔥 ERROR LUAR 🔥🔥🔥");
+    console.error("   - Pesan:", err?.message || err);
   }
 })();
