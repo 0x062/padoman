@@ -1,0 +1,16 @@
+{
+  "name": "pharos-domain-bot",
+  "version": "1.0.0",
+  "description": "Bot untuk mendaftarkan domain .phrs secara otomatis menggunakan ethers.js.",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.1"
+  }
+}
