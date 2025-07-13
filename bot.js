@@ -1,4 +1,4 @@
-// bot.js - Versi Final (Terbukti dari Block Explorer)
+// bot.js - Versi Pamungkas
 
 import 'dotenv/config'
 import { ethers, namehash, Interface } from 'ethers'
@@ -8,7 +8,6 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY
 const REGISTRAR_ADDR = '0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175'
 const PUBLIC_RESOLVER = '0x9a43dcA1C3BB268546b98eb2AB1401bFc5b58505'
 
-// ABI yang sudah terkonfirmasi benar dan disederhanakan
 const REGISTRAR_ABI = [
   'function available(string) view returns (bool)',
   'function minCommitmentAge() view returns (uint256)',
@@ -30,8 +29,6 @@ async function registerDomain(label) {
   const owner = await wallet.getAddress()
   const duration = 31536000n 
   const normalizedLabel = ethers.ensNormalize(label)
-  console.log(`[DEBUG] Label setelah normalisasi: '${normalizedLabel}'`)
-
   const fullName = `${normalizedLabel}.phrs`
   const node = namehash(fullName)
 
@@ -52,26 +49,24 @@ async function registerDomain(label) {
   console.log(`⏱  Menunggu ${waitTimeWithBuffer.toString()} detik...`)
   await sleep(Number(waitTimeWithBuffer) * 1000)
 
-  const price = await registrar.rentPrice(normalizedLabel, duration)
-  console.log(`[i] Harga sewa yang dihitung: ${ethers.formatEther(price)} PHRS`)
+  // --- PERBAIKAN UTAMA DI SINI ---
+  const basePrice = await registrar.rentPrice(normalizedLabel, duration)
+  // ✅ Tambahkan buffer 5% ke harga dasar untuk memastikan pembayaran cukup
+  const priceWithBuffer = (basePrice * 105n) / 100n; 
+  console.log(`[i] Harga dasar: ${ethers.formatEther(basePrice)} PHRS`)
+  console.log(`[i] Harga dengan buffer 5%: ${ethers.formatEther(priceWithBuffer)} PHRS`)
   
   const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
   console.log('✅ Data untuk resolver siap')
 
-  // ✅ PERBAIKAN FINAL: Memanggil `register` secara langsung, bukan via `multicall`
   console.log('2️⃣ Mengirim transaksi "register" langsung...')
   const txRegister = await registrar.register(
-    normalizedLabel,
-    owner,
-    duration,
-    secret,
-    PUBLIC_RESOLVER,
-    dataForResolver,
-    false,
-    0,
+    normalizedLabel, owner, duration, secret, PUBLIC_RESOLVER,
+    dataForResolver, false, 0,
     { 
-      value: price,
-      gasLimit: 500000 // Tetap gunakan gasLimit untuk keamanan
+      // ✅ Gunakan harga yang sudah diberi buffer
+      value: priceWithBuffer, 
+      gasLimit: 500000 
     }
   )
 
@@ -80,11 +75,10 @@ async function registerDomain(label) {
   console.log(`   Tx Hash: ${txRegister.hash}`)
 }
 
-// Ganti dengan label baru yang belum pernah Anda coba
-const newLabel = 'patnerbyuerhasil' 
+// Ganti dengan label baru agar tidak konflik dengan percobaan sebelumnya
+const newLabel = 'partnerfinalbanget' 
 registerDomain(newLabel).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan Singkat: ${err.reason || err.message}`)
-  // Tampilkan keseluruhan error untuk detail lebih lanjut
   console.error('   - Detail Error Lengkap:', err) 
 })
