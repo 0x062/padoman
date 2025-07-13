@@ -1,4 +1,4 @@
-// bot.js - Versi Final (Definitif)
+// bot.js - Versi Final dengan Panggilan Langsung ke Register
 
 import 'dotenv/config'
 import { ethers, namehash, Interface } from 'ethers'
@@ -8,21 +8,18 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY
 const REGISTRAR_ADDR = '0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175'
 const PUBLIC_RESOLVER = '0x9a43dcA1C3BB268546b98eb2AB1401bFc5b58505'
 
-// ✅ ABI dengan nama fungsi yang sudah 100% terkonfirmasi
 const REGISTRAR_ABI = [
   'function available(string) view returns (bool)',
   'function minCommitmentAge() view returns (uint256)',
   'function rentPrice(string,uint256) view returns (uint256)',
-  'function commit(bytes32)', // <-- NAMA FUNGSI YANG BENAR
-  'function multicall(bytes[]) payable',
-  'function register(string,address,uint256,bytes32,address,bytes[],bool,uint16) payable'
+  'function commit(bytes32)',
+  'function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses) payable'
 ]
 const RESOLVER_ABI = ['function setAddr(bytes32 node, address a)']
 
 const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL)
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider)
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet)
-const registrarInterface = new Interface(REGISTRAR_ABI)
 const resolverInterface = new Interface(RESOLVER_ABI)
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -45,7 +42,6 @@ async function registerDomain(label) {
   const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [normalizedLabel, owner, secret])
 
   console.log('1️⃣ Mengirim transaksi "commit"...')
-  // ✅ Memanggil fungsi dengan nama yang sudah terkonfirmasi benar
   const txCommit = await registrar.commit(commitment) 
   await txCommit.wait()
   console.log(`✅ Commit berhasil, tx: ${txCommit.hash}`)
@@ -59,17 +55,24 @@ async function registerDomain(label) {
   console.log(`[DEBUG] Harga sewa yang dihitung: ${ethers.formatEther(price)} PHRS`)
   
   const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
-  const registerCallData = registrarInterface.encodeFunctionData('register', [
-    normalizedLabel, owner, duration, secret, PUBLIC_RESOLVER,
-    dataForResolver, false, 0
-  ])
-  console.log('✅ Data untuk Register siap dibungkus dalam multicall')
+  console.log('✅ Data untuk resolver siap')
 
-  console.log('2️⃣ Mengirim transaksi "multicall(register)"...')
-  const txRegister = await registrar.multicall([registerCallData], { 
-    value: price,
-    gasLimit: 500000 
-  })
+  // ✅ PERBAIKAN: Membuang multicall dan memanggil `register` secara langsung
+  console.log('2️⃣ Mengirim transaksi "register" langsung...')
+  const txRegister = await registrar.register(
+    normalizedLabel,
+    owner,
+    duration,
+    secret,
+    PUBLIC_RESOLVER,
+    dataForResolver,
+    false,
+    0,
+    { 
+      value: price,
+      gasLimit: 500000 
+    }
+  )
 
   await txRegister.wait()
   console.log(`\n🎉 DOMAIN BERHASIL TERDAFTAR!`)
@@ -77,7 +80,7 @@ async function registerDomain(label) {
 }
 
 // Ganti dengan label baru yang belum pernah dicoba
-const newLabel = 'partnerjuarasukses' 
+const newLabel = 'partnerjuarafinalv2' 
 registerDomain(newLabel).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan Singkat: ${err.reason || err.message}`)
