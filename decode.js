@@ -1,45 +1,22 @@
-import { JsonRpcProvider, Interface } from "ethers";
+// decodeRegister.js
+import { Interface } from "ethers";
 
-// 1. RPC & hash
-const provider = new JsonRpcProvider("https://testnet.dplabs-internal.com");
-const txHash = "0x4b6842b14a13a590d516d6986348486981b9125597914bfc8298a51915e55496";
-
-// 2. ABI dengan SEMUA kemungkinan nama fungsi commit
-const POSSIBLE_ABIS = [
-    // Ini adalah fungsi yang kita coba decode
-    "function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses)",
-    
-    // Ini adalah tersangka-tersangka kita untuk transaksi commit
-    "function commit(bytes32 commitment)",
-    "function Commit(bytes32 commitment)",
-    "function makeCommitment(bytes32 commitment)"
+const REG_ABI = [
+  "function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses)"
 ];
-const iface = new Interface(POSSIBLE_ABIS);
+const iface = new Interface(REG_ABI);
 
-(async () => {
-    try {
-        // 3. Ambil tx
-        const tx = await provider.getTransaction(txHash);
-        if (!tx) {
-            console.log("Tx belum ditemukan");
-            return;
-        }
+// Ganti dengan data input dari transaksi REGISTER manual Anda yang BERHASIL
+const calldata = "0x74694a2b000000000000000000000000000000000000000000000000000000000000010000000000000000000000000052650cedd2beb608d6b7e94fcce78ea77a5a89870000000000000000000000000000000000000000000000000000000001e133805de29eca00000003c808e71e1f77d546f1256ca159133b947e3208f77218b8df0000000000000000000000009a43dca1c3bb268546b98eb2ab1401bfc5b58505000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b6461726d616e736968796f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a48b95dd71f95e59a407bef0c1873b9a50ac25d6c1e141cee84cc03f7bfa0cbe94af4b56db00000000000000000000000000000000000000000000000000000000800a82300000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001452650cedd2beb608d6b7e94fcce78ea77a5a898700000000000000000000000000000000000000000000000000000000000000000000000000000000";
 
-        // 4. Decode calldata
-        const decoded = iface.parseTransaction({ data: tx.data, value: tx.value });
+const decoded = iface.parseTransaction({ data: calldata });
 
-        if (!decoded) {
-            console.log("Gagal men-decode transaksi. Tidak ada fungsi di ABI yang cocok.");
-            return;
-        }
-
-        console.log("✅ Berhasil men-decode transaksi pertama!");
-        console.log("-----------------------------------------");
-        console.log("• Nama Fungsi Sebenarnya:", decoded.name);
-        console.log("• Argumen (commitment hash):", decoded.args[0]);
-        console.log("• Value:", tx.value.toString());
-
-    } catch (error) {
-        console.error("Terjadi error:", error.message);
-    }
-})();
+console.log("--- Argumen dari Transaksi Manual yang Sukses ---");
+console.log("name:", decoded.args[0]);
+console.log("owner:", decoded.args[1]);
+console.log("duration:", decoded.args[2].toString());
+console.log("secret:", decoded.args[3]);
+console.log("resolver:", decoded.args[4]);
+console.log("data:", decoded.args[5]);
+console.log("reverseRecord:", decoded.args[6]);
+console.log("ownerControlledFuses:", decoded.args[7]);
