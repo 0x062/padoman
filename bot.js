@@ -1,4 +1,4 @@
-// bot.js - Versi Final dengan BigInt
+// bot.js - Versi Final dengan Normalisasi Label
 
 import 'dotenv/config'
 import { ethers, namehash, Interface } from 'ethers'
@@ -25,49 +25,50 @@ const registrarInterface = new Interface(REGISTRAR_ABI)
 const resolverInterface = new Interface(RESOLVER_ABI)
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
-// ✅ Rahasia tetap dalam bentuk bytes32
 const secret = ethers.randomBytes(32)
 
 async function registerDomain(label) {
   const owner = await wallet.getAddress()
-  // ✅ Durasi sekarang adalah BigInt
   const duration = 31536000n 
-  const fullName = `${label}.phrs`
+  
+  // ✅ PERBAIKAN KRUSIAL: Normalisasi label sebelum digunakan
+  const normalizedLabel = ethers.ensNormalize(label)
+  console.log(`[DEBUG] Label asli: '${label}', Setelah normalisasi: '${normalizedLabel}'`)
+
+  const fullName = `${normalizedLabel}.phrs`
   const node = namehash(fullName)
 
   console.log(`\n🚀 Mulai registrasi '${fullName}'`)
 
-  if (!(await registrar.available(label))) throw new Error('Domain tidak tersedia')
+  // Gunakan label yang sudah dinormalisasi untuk semua interaksi kontrak
+  if (!(await registrar.available(normalizedLabel))) throw new Error('Domain tidak tersedia')
   console.log('✅ Domain tersedia')
 
-  const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [label, owner, secret])
+  const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [normalizedLabel, owner, secret])
 
   console.log('1️⃣ Mengirim transaksi "Commit" langsung...')
   const txCommit = await registrar.Commit(commitment)
   await txCommit.wait()
   console.log(`✅ Commit berhasil, tx: ${txCommit.hash}`)
 
-  // ✅ Kalkulasi waktu tunggu menggunakan BigInt
   const minWaitTime = await registrar.minCommitmentAge()
-  const waitTimeWithBuffer = minWaitTime + 15n // Menambah 15 detik (sebagai BigInt)
+  const waitTimeWithBuffer = minWaitTime + 15n 
   console.log(`⏱  Menunggu ${waitTimeWithBuffer.toString()} detik...`)
-  // ✅ Konversi ke Number hanya saat dibutuhkan oleh setTimeout
   await sleep(Number(waitTimeWithBuffer) * 1000)
 
-  // ✅ Variabel `price` sudah otomatis menjadi BigInt dari ethers.js
-  const price = await registrar.rentPrice(label, duration)
+  const price = await registrar.rentPrice(normalizedLabel, duration)
   console.log(`[DEBUG] Harga sewa yang dihitung: ${ethers.formatEther(price)} PHRS`)
   
   const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
   const registerCallData = registrarInterface.encodeFunctionData('Register', [
-    label, owner, duration, secret, PUBLIC_RESOLVER,
+    normalizedLabel, owner, duration, secret, PUBLIC_RESOLVER,
     dataForResolver, false, 0
   ])
   console.log('✅ Data untuk Register siap dibungkus dalam multicall')
 
   console.log('2️⃣ Mengirim transaksi "multicall(Register)"...')
   const txRegister = await registrar.multicall([registerCallData], { 
-    value: price, // `price` sudah BigInt, aman
+    value: price,
     gasLimit: 500000 
   })
 
@@ -77,7 +78,7 @@ async function registerDomain(label) {
 }
 
 // Ganti label dan jalankan
-const newLabel = 'partnerjara2'
+const newLabel = 'partnerjuara2'
 registerDomain(newLabel).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan Singkat: ${err.reason || err.message}`)
