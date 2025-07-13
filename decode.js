@@ -2,7 +2,7 @@ import { JsonRpcProvider, Interface } from "ethers";
 
 // 1. RPC & hash
 const provider = new JsonRpcProvider("https://testnet.dplabs-internal.com");
-const txHash = "0xcaf6a6ecfb264e956003c68ecf3982808274bd90cd96fc153aaa1406a1a2cefd";
+const txHash = "0x4b6842b14a13a590d516d6986348486981b9125597914bfc8298a51915e55496";
 
 // 2. ABI dengan SEMUA kemungkinan nama fungsi commit
 const POSSIBLE_ABIS = [
