@@ -1,5 +1,3 @@
-// bot.js - Versi Pamungkas
-
 import 'dotenv/config'
 import { ethers, namehash, Interface } from 'ethers'
 
@@ -31,13 +29,23 @@ async function registerDomain(label) {
   const normalizedLabel = ethers.ensNormalize(label)
   const fullName = `${normalizedLabel}.phrs`
   const node = namehash(fullName)
+  const reverseRecord = false;
+  const ownerControlledFuses = 0;
 
   console.log(`\n🚀 Mulai registrasi '${fullName}'`)
 
   if (!(await registrar.available(normalizedLabel))) throw new Error('Domain tidak tersedia')
   console.log('✅ Domain tersedia')
 
-  const commitment = ethers.solidityPackedKeccak256(['string', 'address', 'bytes32'], [normalizedLabel, owner, secret])
+  // Siapkan data untuk resolver SEBELUM membuat commitment
+  const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
+
+  // ✅ PERBAIKAN FINAL: Membuat commitment hash dengan SEMUA argumen yang relevan
+  const commitment = ethers.solidityPackedKeccak256(
+    ['string', 'address', 'uint256', 'bytes32', 'address', 'bytes[]', 'bool', 'uint16'],
+    [normalizedLabel, owner, duration, secret, PUBLIC_RESOLVER, dataForResolver, reverseRecord, ownerControlledFuses]
+  );
+  console.log(`[DEBUG] Commitment hash (resep lengkap) dibuat: ${commitment}`);
 
   console.log('1️⃣ Mengirim transaksi "commit"...')
   const txCommit = await registrar.commit(commitment) 
@@ -49,22 +57,22 @@ async function registerDomain(label) {
   console.log(`⏱  Menunggu ${waitTimeWithBuffer.toString()} detik...`)
   await sleep(Number(waitTimeWithBuffer) * 1000)
 
-  // --- PERBAIKAN UTAMA DI SINI ---
-  const basePrice = await registrar.rentPrice(normalizedLabel, duration)
-  // ✅ Tambahkan buffer 5% ke harga dasar untuk memastikan pembayaran cukup
-  const priceWithBuffer = (basePrice * 105n) / 100n; 
-  console.log(`[i] Harga dasar: ${ethers.formatEther(basePrice)} PHRS`)
+  const price = await registrar.rentPrice(normalizedLabel, duration)
+  const priceWithBuffer = (price * 105n) / 100n; 
+  console.log(`[i] Harga dasar: ${ethers.formatEther(price)} PHRS`)
   console.log(`[i] Harga dengan buffer 5%: ${ethers.formatEther(priceWithBuffer)} PHRS`)
   
-  const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
-  console.log('✅ Data untuk resolver siap')
-
   console.log('2️⃣ Mengirim transaksi "register" langsung...')
   const txRegister = await registrar.register(
-    normalizedLabel, owner, duration, secret, PUBLIC_RESOLVER,
-    dataForResolver, false, 0,
+    normalizedLabel,
+    owner,
+    duration,
+    secret,
+    PUBLIC_RESOLVER,
+    dataForResolver,
+    reverseRecord,
+    ownerControlledFuses,
     { 
-      // ✅ Gunakan harga yang sudah diberi buffer
       value: priceWithBuffer, 
       gasLimit: 500000 
     }
@@ -75,8 +83,8 @@ async function registerDomain(label) {
   console.log(`   Tx Hash: ${txRegister.hash}`)
 }
 
-// Ganti dengan label baru agar tidak konflik dengan percobaan sebelumnya
-const newLabel = 'partnerfinalbanget' 
+// Ganti dengan label baru
+const newLabel = 'akhirnyaberhasil' 
 registerDomain(newLabel).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan Singkat: ${err.reason || err.message}`)
