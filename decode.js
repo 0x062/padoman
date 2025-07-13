@@ -1,22 +1,93 @@
-// decodeRegister.js
-import { Interface } from "ethers";
+import 'dotenv/config'
+import { ethers, namehash, Interface } from 'ethers'
 
-const REG_ABI = [
-  "function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses)"
+// ===================================================================================
+// ⚙️ PENGATURAN - GANTI HASH TRANSAKSI DI SINI
+// ===================================================================================
+
+const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL
+
+// Ganti dengan hash dari transaksi COMMIT manual Anda yang berhasil
+const COMMIT_TX_HASH   = "0x4b6842b14a13a590d516d6986348486981b9125597914bfc8298a51915e55496"; 
+
+// Ganti dengan hash dari transaksi REGISTER manual Anda yang berhasil
+const REGISTER_TX_HASH = "0xcaf6a6ecfb264e956003c68ecf3982808274bd90cd96fc153aaa1406a1a2cefd";
+
+// ===================================================================================
+// 🛠️ SKRIP ANALISIS
+// ===================================================================================
+
+const provider = new JsonRpcProvider(PHAROS_RPC_URL);
+
+// Gabungkan semua ABI yang mungkin untuk di-decode
+const REGISTRAR_ABI = [
+    'function commit(bytes32)',
+    'function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses)'
 ];
-const iface = new Interface(REG_ABI);
+const iface = new Interface(REGISTRAR_ABI);
 
-// Ganti dengan data input dari transaksi REGISTER manual Anda yang BERHASIL
-const calldata = "0x74694a2b000000000000000000000000000000000000000000000000000000000000010000000000000000000000000052650cedd2beb608d6b7e94fcce78ea77a5a89870000000000000000000000000000000000000000000000000000000001e133805de29eca00000003c808e71e1f77d546f1256ca159133b947e3208f77218b8df0000000000000000000000009a43dca1c3bb268546b98eb2ab1401bfc5b58505000000000000000000000000000000000000000000000000000000000000014000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b6461726d616e736968796f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a48b95dd71f95e59a407bef0c1873b9a50ac25d6c1e141cee84cc03f7bfa0cbe94af4b56db00000000000000000000000000000000000000000000000000000000800a82300000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001452650cedd2beb608d6b7e94fcce78ea77a5a898700000000000000000000000000000000000000000000000000000000000000000000000000000000";
+async function verifyFlow() {
+    console.log(" Menganalisis Alur Commit -> Register ".padStart(50, '=').padEnd(80, '='));
+    console.log(`[i] Tx Commit  : ${COMMIT_TX_HASH}`);
+    console.log(`[i] Tx Register: ${REGISTER_TX_HASH}`);
+    console.log("".padEnd(80, '='));
 
-const decoded = iface.parseTransaction({ data: calldata });
+    if (COMMIT_TX_HASH.startsWith('GANTI_DENGAN') || REGISTER_TX_HASH.startsWith('GANTI_DENGAN')) {
+        throw new Error("Harap ganti nilai HASH transaksi di dalam skrip terlebih dahulu.");
+    }
 
-console.log("--- Argumen dari Transaksi Manual yang Sukses ---");
-console.log("name:", decoded.args[0]);
-console.log("owner:", decoded.args[1]);
-console.log("duration:", decoded.args[2].toString());
-console.log("secret:", decoded.args[3]);
-console.log("resolver:", decoded.args[4]);
-console.log("data:", decoded.args[5]);
-console.log("reverseRecord:", decoded.args[6]);
-console.log("ownerControlledFuses:", decoded.args[7]);
+    // --- Langkah 1: Bedah Transaksi COMMIT ---
+    console.log("\n1️⃣  Membedah transaksi Commit...");
+    const commitTx = await provider.getTransaction(COMMIT_TX_HASH);
+    if (!commitTx) throw new Error("Transaksi Commit tidak ditemukan.");
+    
+    const decodedCommit = iface.parseTransaction({ data: commitTx.data });
+    if (!decodedCommit || decodedCommit.name !== 'commit') {
+        throw new Error("Gagal men-decode transaksi Commit atau nama fungsi bukan 'commit'.");
+    }
+    
+    const onChainCommitmentHash = decodedCommit.args[0];
+    console.log(`[+] Hash yang dikirim di 'commit'  : ${onChainCommitmentHash}`);
+
+    // --- Langkah 2: Bedah Transaksi REGISTER ---
+    console.log("\n2️⃣  Membedah transaksi Register...");
+    const registerTx = await provider.getTransaction(REGISTER_TX_HASH);
+    if (!registerTx) throw new Error("Transaksi Register tidak ditemukan.");
+
+    const decodedRegister = iface.parseTransaction({ data: registerTx.data });
+    if (!decodedRegister || decodedRegister.name !== 'register') {
+        throw new Error("Gagal men-decode transaksi Register atau nama fungsi bukan 'register'.");
+    }
+    
+    console.log("[+] Argumen dari 'register' berhasil di-decode.");
+    const [name, owner, duration, secret, resolver, data, reverseRecord, fuses] = decodedRegister.args;
+
+    // --- Langkah 3: Buat Ulang Hash Secara Lokal ---
+    console.log("\n3️⃣  Membuat ulang commitment hash dari data Register...");
+    
+    const locallyGeneratedHash = ethers.solidityPackedKeccak256(
+        ['string', 'address', 'uint256', 'bytes32', 'address', 'bytes[]', 'bool', 'uint16'],
+        [name, owner, duration, secret, resolver, data, reverseRecord, fuses]
+    );
+    console.log(`[i] Hash yang dibuat ulang lokal: ${locallyGeneratedHash}`);
+
+    // --- Langkah 4: Validasi ---
+    console.log("\n4️⃣  Memvalidasi kecocokan hash...");
+    console.log("".padEnd(80, '-'));
+    
+    if (onChainCommitmentHash === locallyGeneratedHash) {
+        console.log("✅ SINKRON & VALID!");
+        console.log("   'Resep' hash kita sudah 100% benar.");
+    } else {
+        console.log("❌ TIDAK SINKRON!");
+        console.log("   'Resep' hash kita masih salah atau ada data yang berbeda.");
+        console.log(`   - Hash di 'commit'  : ${onChainCommitmentHash}`);
+        console.log(`   - Hash dari 'register': ${locallyGeneratedHash}`);
+    }
+    console.log("".padEnd(80, '-'));
+}
+
+verifyFlow().catch(err => {
+    console.error("\n🔥🔥🔥 ANALISIS GAGAL 🔥🔥🔥");
+    console.error(`  - Pesan: ${err.message}`);
+});
