@@ -1,7 +1,7 @@
-// bot.js - Versi Final (Berdasarkan Source Code)
+// bot.js - Versi Definitif (Berdasarkan Resep Asli)
 
 import 'dotenv/config'
-import { ethers, namehash, Interface, AbiCoder } from 'ethers'
+import { ethers, namehash } from 'ethers'
 
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL
 const PRIVATE_KEY = process.env.PRIVATE_KEY
@@ -15,12 +15,10 @@ const REGISTRAR_ABI = [
   'function commit(bytes32)',
   'function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses) payable'
 ]
-const RESOLVER_ABI = ['function setAddr(bytes32 node, address a)']
 
 const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL)
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider)
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet)
-const resolverInterface = new Interface(RESOLVER_ABI)
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const secret = ethers.randomBytes(32)
@@ -29,27 +27,21 @@ async function registerDomain(label) {
   const owner = await wallet.getAddress()
   const duration = 31536000n 
   const normalizedLabel = ethers.ensNormalize(label)
-  const fullName = `${normalizedLabel}.phrs`
-  const node = namehash(fullName)
-  const reverseRecord = false;
-  const ownerControlledFuses = 0;
+  console.log(`[DEBUG] Label setelah normalisasi: '${normalizedLabel}'`)
 
-  console.log(`\n🚀 Mulai registrasi '${fullName}'`)
+  console.log(`\n🚀 Mulai registrasi '${normalizedLabel}.phrs'`)
 
   if (!(await registrar.available(normalizedLabel))) throw new Error('Domain tidak tersedia')
   console.log('✅ Domain tersedia')
 
-  // Siapkan data untuk resolver terlebih dahulu
-  const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
-  
-  // ✅ LANGKAH RAHASIA: Buat hash dari data resolver
-  const dataHash = ethers.keccak256(AbiCoder.defaultAbiCoder().encode(['bytes[]'], [dataForResolver]));
-  console.log(`[DEBUG] Hash dari data resolver: ${dataHash}`)
+  // ✅ LANGKAH KRUSIAL #1: Buat hash dari label
+  const labelHash = ethers.id(normalizedLabel);
+  console.log(`[DEBUG] Hash dari label (labelhash): ${labelHash}`);
 
-  // ✅ RESEP FINAL: Membuat commitment hash dengan resep yang benar
+  // ✅ LANGKAH KRUSIAL #2: Gunakan resep yang BENAR
   const commitment = ethers.solidityPackedKeccak256(
-    ['string', 'address', 'bytes32', 'address', 'bytes32'],
-    [normalizedLabel, owner, secret, PUBLIC_RESOLVER, dataHash]
+    ['bytes32', 'address', 'uint256', 'bytes32'],
+    [labelHash, owner, duration, secret]
   );
   console.log(`[DEBUG] Commitment hash final yang dikirim: ${commitment}`);
 
@@ -67,6 +59,11 @@ async function registerDomain(label) {
   const priceWithBuffer = (price * 105n) / 100n; 
   console.log(`[i] Harga sewa dengan buffer 5%: ${ethers.formatEther(priceWithBuffer)} PHRS`)
   
+  // Untuk register, kita tetap tidak butuh resolver data berdasarkan tes sebelumnya
+  const dataForResolver = []; 
+  const reverseRecord = false;
+  const ownerControlledFuses = 0;
+
   console.log('2️⃣ Mengirim transaksi "register" langsung...')
   const txRegister = await registrar.register(
     normalizedLabel,
@@ -89,7 +86,7 @@ async function registerDomain(label) {
 }
 
 // Ganti dengan label baru yang belum pernah Anda daftarkan
-const newLabel = 'kitaperhasil' 
+const newLabel = 'finalvsninemonth' 
 registerDomain(newLabel).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan Singkat: ${err.reason || err.message}`)
