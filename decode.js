@@ -2,7 +2,7 @@ import { JsonRpcProvider, Interface } from "ethers";
 
 // 1. RPC & hash
 const provider = new JsonRpcProvider("https://testnet.dplabs-internal.com");
-const txHash   = "0xaf8d016ebe6601e4f5016971b932665a6ad57257d60471ee05b5f9d7d585d12b";
+const txHash   = "0xcaf6a6ecfb264e956003c68ecf3982808274bd90cd96fc153aaa1406a1a2cefd";
 
 // 2. ABI fungsi register di registrar
 const REG_ABI = [
