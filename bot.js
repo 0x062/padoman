@@ -1,4 +1,4 @@
-// bot.js - Versi Final dengan Panggilan Langsung ke Register
+// bot.js - Versi Final (Terbukti dari Block Explorer)
 
 import 'dotenv/config'
 import { ethers, namehash, Interface } from 'ethers'
@@ -8,6 +8,7 @@ const PRIVATE_KEY = process.env.PRIVATE_KEY
 const REGISTRAR_ADDR = '0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175'
 const PUBLIC_RESOLVER = '0x9a43dcA1C3BB268546b98eb2AB1401bFc5b58505'
 
+// ABI yang sudah terkonfirmasi benar dan disederhanakan
 const REGISTRAR_ABI = [
   'function available(string) view returns (bool)',
   'function minCommitmentAge() view returns (uint256)',
@@ -29,7 +30,7 @@ async function registerDomain(label) {
   const owner = await wallet.getAddress()
   const duration = 31536000n 
   const normalizedLabel = ethers.ensNormalize(label)
-  console.log(`[DEBUG] Label asli: '${label}', Setelah normalisasi: '${normalizedLabel}'`)
+  console.log(`[DEBUG] Label setelah normalisasi: '${normalizedLabel}'`)
 
   const fullName = `${normalizedLabel}.phrs`
   const node = namehash(fullName)
@@ -52,12 +53,12 @@ async function registerDomain(label) {
   await sleep(Number(waitTimeWithBuffer) * 1000)
 
   const price = await registrar.rentPrice(normalizedLabel, duration)
-  console.log(`[DEBUG] Harga sewa yang dihitung: ${ethers.formatEther(price)} PHRS`)
+  console.log(`[i] Harga sewa yang dihitung: ${ethers.formatEther(price)} PHRS`)
   
   const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
   console.log('✅ Data untuk resolver siap')
 
-  // ✅ PERBAIKAN: Membuang multicall dan memanggil `register` secara langsung
+  // ✅ PERBAIKAN FINAL: Memanggil `register` secara langsung, bukan via `multicall`
   console.log('2️⃣ Mengirim transaksi "register" langsung...')
   const txRegister = await registrar.register(
     normalizedLabel,
@@ -70,7 +71,7 @@ async function registerDomain(label) {
     0,
     { 
       value: price,
-      gasLimit: 500000 
+      gasLimit: 500000 // Tetap gunakan gasLimit untuk keamanan
     }
   )
 
@@ -79,10 +80,11 @@ async function registerDomain(label) {
   console.log(`   Tx Hash: ${txRegister.hash}`)
 }
 
-// Ganti dengan label baru yang belum pernah dicoba
-const newLabel = 'partnerjuarafinalv2' 
+// Ganti dengan label baru yang belum pernah Anda coba
+const newLabel = 'patnerbyuerhasil' 
 registerDomain(newLabel).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan Singkat: ${err.reason || err.message}`)
+  // Tampilkan keseluruhan error untuk detail lebih lanjut
   console.error('   - Detail Error Lengkap:', err) 
 })
