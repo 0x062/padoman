@@ -1,93 +1,100 @@
-import 'dotenv/config'
-import { ethers, namehash, Interface } from 'ethers'
+// bot.js - Versi Final (Tes Replay Sempurna)
 
-// ===================================================================================
-// ⚙️ PENGATURAN - GANTI HASH TRANSAKSI DI SINI
-// ===================================================================================
+import 'dotenv/config'
+import { ethers, namehash } from 'ethers'
 
 const PHAROS_RPC_URL = process.env.PHAROS_RPC_URL
+const PRIVATE_KEY = process.env.PRIVATE_KEY
+const REGISTRAR_ADDR = '0x51bE1EF20a1fD5179419738FC71D95A8b6f8A175'
 
-// Ganti dengan hash dari transaksi COMMIT manual Anda yang berhasil
-const COMMIT_TX_HASH   = "0x4b6842b14a13a590d516d6986348486981b9125597914bfc8298a51915e55496"; 
-
-// Ganti dengan hash dari transaksi REGISTER manual Anda yang berhasil
-const REGISTER_TX_HASH = "0xcaf6a6ecfb264e956003c68ecf3982808274bd90cd96fc153aaa1406a1a2cefd";
-
-// ===================================================================================
-// 🛠️ SKRIP ANALISIS
-// ===================================================================================
-
-// BENAR
-const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
-// Gabungkan semua ABI yang mungkin untuk di-decode
 const REGISTRAR_ABI = [
-    'function commit(bytes32)',
-    'function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses)'
-];
-const iface = new Interface(REGISTRAR_ABI);
+  'function available(string) view returns (bool)',
+  'function minCommitmentAge() view returns (uint256)',
+  'function rentPrice(string,uint256) view returns (uint256)',
+  'function commit(bytes32)',
+  'function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses) payable'
+]
 
-async function verifyFlow() {
-    console.log(" Menganalisis Alur Commit -> Register ".padStart(50, '=').padEnd(80, '='));
-    console.log(`[i] Tx Commit  : ${COMMIT_TX_HASH}`);
-    console.log(`[i] Tx Register: ${REGISTER_TX_HASH}`);
-    console.log("".padEnd(80, '='));
+const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL)
+const wallet = new ethers.Wallet(PRIVATE_KEY, provider)
+const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet)
 
-    if (COMMIT_TX_HASH.startsWith('GANTI_DENGAN') || REGISTER_TX_HASH.startsWith('GANTI_DENGAN')) {
-        throw new Error("Harap ganti nilai HASH transaksi di dalam skrip terlebih dahulu.");
-    }
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-    // --- Langkah 1: Bedah Transaksi COMMIT ---
-    console.log("\n1️⃣  Membedah transaksi Commit...");
-    const commitTx = await provider.getTransaction(COMMIT_TX_HASH);
-    if (!commitTx) throw new Error("Transaksi Commit tidak ditemukan.");
-    
-    const decodedCommit = iface.parseTransaction({ data: commitTx.data });
-    if (!decodedCommit || decodedCommit.name !== 'commit') {
-        throw new Error("Gagal men-decode transaksi Commit atau nama fungsi bukan 'commit'.");
-    }
-    
-    const onChainCommitmentHash = decodedCommit.args[0];
-    console.log(`[+] Hash yang dikirim di 'commit'  : ${onChainCommitmentHash}`);
+// --- DATA "CONTEKAN" DARI TRANSAKSI MANUAL ANDA YANG SUKSES ---
+const knownGood = {
+    owner: '0x52650ceDD2bEB608d6B7e94fccE78EA77A5a8987',
+    duration: 31536000n,
+    secret: '0x5de29eca00000003c808e71e1f77d546f1256ca159133b947e3208f77218b8df',
+    resolver: '0x9a43dcA1C3BB268546b98eb2AB1401bFc5b58505',
+    dataForResolver: ['0x8b95dd71f95e59a407bef0c1873b9a50ac25d6c1e141cee84cc03f7bfa0cbe94af4b56db00000000000000000000000000000000000000000000000000000000800a82300000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000001452650cedd2beb608d6b7e94fcce78ea77a5a8987000000000000000000000000'],
+    reverseRecord: false,
+    ownerControlledFuses: 0
+};
+// -------------------------------------------------------------
 
-    // --- Langkah 2: Bedah Transaksi REGISTER ---
-    console.log("\n2️⃣  Membedah transaksi Register...");
-    const registerTx = await provider.getTransaction(REGISTER_TX_HASH);
-    if (!registerTx) throw new Error("Transaksi Register tidak ditemukan.");
+async function registerDomain(label) {
+  const normalizedLabel = ethers.ensNormalize(label)
+  console.log(`\n🚀 Mulai registrasi '${normalizedLabel}.phrs' (Mode Replay)`)
 
-    const decodedRegister = iface.parseTransaction({ data: registerTx.data });
-    if (!decodedRegister || decodedRegister.name !== 'register') {
-        throw new Error("Gagal men-decode transaksi Register atau nama fungsi bukan 'register'.");
-    }
-    
-    console.log("[+] Argumen dari 'register' berhasil di-decode.");
-    const [name, owner, duration, secret, resolver, data, reverseRecord, fuses] = decodedRegister.args;
+  if (!(await registrar.available(normalizedLabel))) throw new Error('Domain tidak tersedia')
+  console.log('✅ Domain tersedia')
+  
+  // Membuat commitment HANYA menggunakan data "contekan", kecuali label
+  const commitment = ethers.solidityPackedKeccak256(
+    ['string', 'address', 'uint256', 'bytes32', 'address', 'bytes[]', 'bool', 'uint16'],
+    [
+        normalizedLabel,
+        knownGood.owner,
+        knownGood.duration,
+        knownGood.secret, // Menggunakan secret yang sudah terbukti berhasil
+        knownGood.resolver,
+        knownGood.dataForResolver, // Menggunakan data resolver yang sudah terbukti berhasil
+        knownGood.reverseRecord,
+        knownGood.ownerControlledFuses
+    ]
+  );
+  console.log(`[DEBUG] Replay Commitment Hash: ${commitment}`);
 
-    // --- Langkah 3: Buat Ulang Hash Secara Lokal ---
-    console.log("\n3️⃣  Membuat ulang commitment hash dari data Register...");
-    
-    const locallyGeneratedHash = ethers.solidityPackedKeccak256(
-        ['string', 'address', 'uint256', 'bytes32', 'address', 'bytes[]', 'bool', 'uint16'],
-        [name, owner, duration, secret, resolver, data, reverseRecord, fuses]
-    );
-    console.log(`[i] Hash yang dibuat ulang lokal: ${locallyGeneratedHash}`);
+  console.log('1️⃣ Mengirim transaksi "commit"...')
+  const txCommit = await registrar.commit(commitment) 
+  await txCommit.wait()
+  console.log(`✅ Commit berhasil, tx: ${txCommit.hash}`)
 
-    // --- Langkah 4: Validasi ---
-    console.log("\n4️⃣  Memvalidasi kecocokan hash...");
-    console.log("".padEnd(80, '-'));
-    
-    if (onChainCommitmentHash === locallyGeneratedHash) {
-        console.log("✅ SINKRON & VALID!");
-        console.log("   'Resep' hash kita sudah 100% benar.");
-    } else {
-        console.log("❌ TIDAK SINKRON!");
-        console.log("   'Resep' hash kita masih salah atau ada data yang berbeda.");
-        console.log(`   - Hash di 'commit'  : ${onChainCommitmentHash}`);
-        console.log(`   - Hash dari 'register': ${locallyGeneratedHash}`);
-    }
-    console.log("".padEnd(80, '-'));
+  const minWaitTime = await registrar.minCommitmentAge()
+  const waitTimeWithBuffer = minWaitTime + 15n 
+  console.log(`⏱  Menunggu ${waitTimeWithBuffer.toString()} detik...`)
+  await sleep(Number(waitTimeWithBuffer) * 1000)
+
+  const price = await registrar.rentPrice(normalizedLabel, knownGood.duration)
+  const priceWithBuffer = (price * 105n) / 100n; 
+  console.log(`[i] Harga dihitung: ${ethers.formatEther(priceWithBuffer)} PHRS`)
+  
+  console.log('2️⃣ Mengirim transaksi "register" (Mode Replay)...')
+  const txRegister = await registrar.register(
+    normalizedLabel,
+    knownGood.owner,
+    knownGood.duration,
+    knownGood.secret,
+    knownGood.resolver,
+    knownGood.dataForResolver,
+    knownGood.reverseRecord,
+    knownGood.ownerControlledFuses,
+    { 
+      value: priceWithBuffer, 
+      gasLimit: 500000 
+    }
+  )
+
+  await txRegister.wait()
+  console.log(`\n🎉 DOMAIN BERHASIL TERDAFTAR!`)
+  console.log(`   Tx Hash: ${txRegister.hash}`)
 }
 
-verifyFlow().catch(err => {
-    console.error("\n🔥🔥🔥 ANALISIS GAGAL 🔥🔥🔥");
-    console.error(`  - Pesan: ${err.message}`);
-});
+// Ganti dengan label baru yang belum pernah Anda daftarkan
+const newLabel = 'finalreplaytest' 
+registerDomain(newLabel).catch(err => {
+  console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
+  console.error(`   - Pesan Singkat: ${err.reason || err.message}`)
+  console.error('   - Detail Error Lengkap:', err) 
+})
