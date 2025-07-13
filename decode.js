@@ -17,8 +17,8 @@ const REGISTER_TX_HASH = "0xcaf6a6ecfb264e956003c68ecf3982808274bd90cd96fc153aaa
 // 🛠️ SKRIP ANALISIS
 // ===================================================================================
 
-const provider = new JsonRpcProvider(PHAROS_RPC_URL);
-
+// BENAR
+const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL);
 // Gabungkan semua ABI yang mungkin untuk di-decode
 const REGISTRAR_ABI = [
     'function commit(bytes32)',
