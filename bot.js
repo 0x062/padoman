@@ -1,3 +1,5 @@
+// bot.js - Versi Final (Tes Diagnostik Minimalis)
+
 import 'dotenv/config'
 import { ethers, namehash, Interface } from 'ethers'
 
@@ -13,12 +15,13 @@ const REGISTRAR_ABI = [
   'function commit(bytes32)',
   'function register(string name,address owner,uint256 duration,bytes32 secret,address resolver,bytes[] data,bool reverseRecord,uint16 ownerControlledFuses) payable'
 ]
-const RESOLVER_ABI = ['function setAddr(bytes32 node, address a)']
+// Kita tidak lagi butuh ABI resolver untuk tes ini
+// const RESOLVER_ABI = ['function setAddr(bytes32 node, address a)']
 
 const provider = new ethers.JsonRpcProvider(PHAROS_RPC_URL)
 const wallet = new ethers.Wallet(PRIVATE_KEY, provider)
 const registrar = new ethers.Contract(REGISTRAR_ADDR, REGISTRAR_ABI, wallet)
-const resolverInterface = new Interface(RESOLVER_ABI)
+// const resolverInterface = new Interface(RESOLVER_ABI)
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const secret = ethers.randomBytes(32)
@@ -28,7 +31,7 @@ async function registerDomain(label) {
   const duration = 31536000n 
   const normalizedLabel = ethers.ensNormalize(label)
   const fullName = `${normalizedLabel}.phrs`
-  const node = namehash(fullName)
+  // const node = namehash(fullName) // Tidak perlu node jika tidak setAddr
   const reverseRecord = false;
   const ownerControlledFuses = 0;
 
@@ -36,11 +39,11 @@ async function registerDomain(label) {
 
   if (!(await registrar.available(normalizedLabel))) throw new Error('Domain tidak tersedia')
   console.log('✅ Domain tersedia')
+  
+  // ✅ UJI COBA: Kita kirim array kosong untuk data resolver
+  const dataForResolver = [];
+  console.log('[i] Uji coba dengan data resolver kosong.')
 
-  // Siapkan data untuk resolver SEBELUM membuat commitment
-  const dataForResolver = [resolverInterface.encodeFunctionData('setAddr', [node, owner])]
-
-  // ✅ PERBAIKAN FINAL: Membuat commitment hash dengan SEMUA argumen yang relevan
   const commitment = ethers.solidityPackedKeccak256(
     ['string', 'address', 'uint256', 'bytes32', 'address', 'bytes[]', 'bool', 'uint16'],
     [normalizedLabel, owner, duration, secret, PUBLIC_RESOLVER, dataForResolver, reverseRecord, ownerControlledFuses]
@@ -69,7 +72,7 @@ async function registerDomain(label) {
     duration,
     secret,
     PUBLIC_RESOLVER,
-    dataForResolver,
+    dataForResolver, // Mengirim array kosong
     reverseRecord,
     ownerControlledFuses,
     { 
@@ -79,12 +82,12 @@ async function registerDomain(label) {
   )
 
   await txRegister.wait()
-  console.log(`\n🎉 DOMAIN BERHASIL TERDAFTAR!`)
+  console.log(`\n🎉 DOMAIN BERHASIL TERDAFTAR! (Alamat perlu di-set manual)`)
   console.log(`   Tx Hash: ${txRegister.hash}`)
 }
 
 // Ganti dengan label baru
-const newLabel = 'akhirnyaberhasil' 
+const newLabel = 'partnerfyinalfix' 
 registerDomain(newLabel).catch(err => {
   console.error('\n🔥🔥🔥 GAGAL 🔥🔥🔥')
   console.error(`   - Pesan Singkat: ${err.reason || err.message}`)
